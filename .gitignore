@@ -1,0 +1,51 @@
+# --- ARCHIVOS DE ENTORNO Y SECRETOS (NUNCA SUBIR) ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+frontend/.env.local
+frontend/.env
+
+# --- SISTEMA OPERATIVO Y EDITORES ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*~
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- FRONTEND (Node.js / Next.js) ---
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+frontend/.turbo/
+frontend/tsconfig.tsbuildinfo
+
+# --- BACKEND (Python) ---
+backend/venv/
+backend/env/
+backend/.venv/
+backend/__pycache__/
+backend/**/*.py[cod]
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/pip-log.txt
+backend/pip-delete-this-directory.txt
+
+# --- DOCKER ---
+mysql_data/
+**/backups/

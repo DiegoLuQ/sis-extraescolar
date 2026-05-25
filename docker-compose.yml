@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sis_backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - PORT=8000
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - EXTERNAL_DB_MC_URL=${EXTERNAL_DB_MC_URL}
+      - EXTERNAL_DB_DP_URL=${EXTERNAL_DB_DP_URL}
+      - MC_SENDER_EMAIL=${MC_SENDER_EMAIL}
+      - MC_SENDER_PASSWORD=${MC_SENDER_PASSWORD}
+      - DP_SENDER_EMAIL=${DP_SENDER_EMAIL}
+      - DP_SENDER_PASSWORD=${DP_SENDER_PASSWORD}
+    networks:
+      - red_pme
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Next.js requiere que se le inyecte la API URL durante la compilación
+        - NEXT_PUBLIC_API_URL=http://${SERVER_IP:-186.64.122.223}:${BACKEND_PORT:-8000}
+    container_name: sis_frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      # Variables leídas por jwilder/nginx-proxy para configurar automáticamente el ruteo
+      - VIRTUAL_HOST=${SERVER_IP:-186.64.122.223}
+      - VIRTUAL_PORT=3000
+    networks:
+      - red_pme
+
+networks:
+  red_pme:
+    external: true

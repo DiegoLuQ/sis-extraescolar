@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mysql *)",
+      "Bash(npx --no-install tsc --noEmit)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -I http://localhost:8003/health)",
+      "Bash(curl -s -I http://localhost:8001/health)",
+      "Bash(curl -s -I http://localhost:8002/health)",
+      "Bash(curl -s -i -X OPTIONS http://localhost:8003/api/inscripciones/resumen -H 'Origin: http://localhost:3002' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization')",
+      "Bash(curl -s -i http://localhost:8003/api/inscripciones/resumen -H \"Origin: http://localhost:3002\")",
+      "Bash(curl -s -i \"http://localhost:8003/api/inscripciones/resumen\" -H \"Origin: http://localhost:3002\" -H \"Authorization: Bearer FAKE\")",
+      "PowerShell(Get-CimInstance *)",
+      "Bash(curl -s -o /tmp/resumen.txt -w \"HTTP %{http_code}\\\\n\" \"http://localhost:8003/api/inscripciones/resumen\" -H \"Origin: http://localhost:3002\" -H \"Authorization: Bearer FAKE\")",
+      "Read(//tmp/**)",
+      "Bash(curl -s -i -X OPTIONS http://localhost:8001/api/inscripciones/resumen -H 'Origin: http://localhost:3002' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization')",
+      "WebFetch(domain:localhost)",
+      "Bash(Get-ChildItem *)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

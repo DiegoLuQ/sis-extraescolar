@@ -21,6 +21,7 @@ services:
       - MC_SENDER_PASSWORD=${MC_SENDER_PASSWORD}
       - DP_SENDER_EMAIL=${DP_SENDER_EMAIL}
       - DP_SENDER_PASSWORD=${DP_SENDER_PASSWORD}
+      - FRONTEND_URL=http://${SERVER_IP:-186.64.122.223}
     networks:
       - base_red_pme
 

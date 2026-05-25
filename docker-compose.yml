@@ -21,7 +21,7 @@ services:
       - MC_SENDER_PASSWORD=${MC_SENDER_PASSWORD}
       - DP_SENDER_EMAIL=${DP_SENDER_EMAIL}
       - DP_SENDER_PASSWORD=${DP_SENDER_PASSWORD}
-      - FRONTEND_URL=http://${SERVER_IP:-186.64.122.223}
+      - FRONTEND_URL=http://${SERVER_IP:-186.64.122.223}:${FRONTEND_PORT:-8091}
     networks:
       - base_red_pme
 
@@ -34,14 +34,11 @@ services:
         - NEXT_PUBLIC_API_URL=http://${SERVER_IP:-186.64.122.223}:${BACKEND_PORT:-8000}
     container_name: sis_frontend
     restart: unless-stopped
-    expose:
-      - "3000"
+    ports:
+      - "${FRONTEND_PORT:-8091}:3000"
     environment:
       - PORT=3000
       - NODE_ENV=production
-      # Variables leídas por jwilder/nginx-proxy para configurar automáticamente el ruteo
-      - VIRTUAL_HOST=${SERVER_IP:-186.64.122.223}
-      - VIRTUAL_PORT=3000
     networks:
       - base_red_pme
 

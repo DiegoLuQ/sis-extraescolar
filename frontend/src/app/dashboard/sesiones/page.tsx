@@ -218,12 +218,12 @@ export default function SesionesPage() {
           </p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
           {canManageCierre && (
             <Button 
               variant="outline"
               onClick={() => setIsCierreGlobalOpen(true)} 
-              className="border-amber-500 text-amber-600 hover:bg-amber-50 font-bold px-4 h-12 rounded-xl transition-all hover:scale-[1.02] active:scale-95 flex-1 md:flex-initial"
+              className="border-amber-500 text-amber-600 hover:bg-amber-50 font-bold px-4 h-12 rounded-xl transition-all hover:scale-[1.02] active:scale-95 w-full sm:w-auto"
             >
               <Lock className="h-4 w-4 mr-2 text-amber-500 shrink-0" />
               <span className="truncate">Cerrar Sesiones del Día</span>
@@ -232,7 +232,7 @@ export default function SesionesPage() {
 
           <Button 
             onClick={() => setIsDialogOpen(true)} 
-            className="bg-calipso-500 hover:bg-calipso-600 font-bold shadow-lg shadow-calipso-100 px-6 h-12 rounded-xl transition-all hover:scale-[1.02] active:scale-95 flex-1 md:flex-initial"
+            className="bg-calipso-500 hover:bg-calipso-600 font-bold shadow-lg shadow-calipso-100 px-6 h-12 rounded-xl transition-all hover:scale-[1.02] active:scale-95 w-full sm:w-auto"
           >
             <Plus className="h-5 w-5 mr-2 shrink-0" />
             <span className="truncate">Nueva Sesión</span>
@@ -241,20 +241,20 @@ export default function SesionesPage() {
       </div>
 
       {/* Barra de Filtros */}
-      <div className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100">
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 w-full lg:w-auto">
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100 self-start md:self-auto shrink-0">
             <Filter className="h-4 w-4 text-gray-400" />
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Filtrar por:</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full md:w-auto">
             {/* Fecha Exacta */}
-            <div className="relative">
-              <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-calipso-500" />
+            <div className="relative w-full sm:w-44">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-calipso-500 pointer-events-none" />
               <Input 
                 type="date" 
-                className="pl-9 w-40 h-10 border-gray-200 rounded-xl focus:ring-calipso-500 focus:border-calipso-500 text-sm font-medium" 
+                className="pl-9 w-full h-11 border-gray-200 rounded-xl focus:ring-calipso-500 focus:border-calipso-500 text-sm font-medium" 
                 value={filterFecha}
                 onChange={(e) => {
                   setFilterFecha(e.target.value);
@@ -270,7 +270,7 @@ export default function SesionesPage() {
               setFilterFecha("");
               if (!filterYear) setFilterYear(currentYear.toString());
             }}>
-              <SelectTrigger className="w-36 h-10 border-gray-200 rounded-xl text-sm font-medium">
+              <SelectTrigger className="w-full sm:w-40 h-11 border-gray-200 rounded-xl text-sm font-medium">
                 <SelectValue placeholder="Seleccionar Mes" />
               </SelectTrigger>
               <SelectContent>
@@ -285,7 +285,7 @@ export default function SesionesPage() {
               setFilterYear(v);
               setFilterFecha("");
             }}>
-              <SelectTrigger className="w-28 h-10 border-gray-200 rounded-xl text-sm font-medium">
+              <SelectTrigger className="w-full sm:w-32 h-11 border-gray-200 rounded-xl text-sm font-medium">
                 <SelectValue placeholder="Año" />
               </SelectTrigger>
               <SelectContent>
@@ -306,7 +306,7 @@ export default function SesionesPage() {
               setFilterMonth("");
               setFilterYear(currentYear.toString());
             }}
-            className="text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors font-bold text-xs flex items-center gap-2 px-4"
+            className="text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors font-bold text-xs flex items-center justify-center gap-2 px-4 py-2 w-full lg:w-auto h-11 rounded-xl"
           >
             <X className="h-4 w-4" />
             Limpiar Filtros
@@ -573,28 +573,28 @@ export default function SesionesPage() {
                 <CardContent className="p-0">
                   <div className="flex flex-col md:flex-row items-stretch">
                     <div className="flex-1 p-4 flex flex-col justify-center">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg shrink-0 ${sesion.bloqueada ? "bg-amber-50 text-amber-600" : "bg-calipso-50 text-calipso-600"}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg shrink-0 mt-0.5 ${sesion.bloqueada ? "bg-amber-50 text-amber-600" : "bg-calipso-50 text-calipso-600"}`}>
                           {sesion.bloqueada ? <Lock className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-black text-gray-900 text-lg leading-none">{tallerName}</h3>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <h3 className="font-black text-gray-900 text-base sm:text-lg leading-tight break-words">{tallerName}</h3>
                             {sesion.bloqueada && (
-                              <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
+                              <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
                                 CERRADA
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mt-1.5">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
                             <span className="text-[11px] font-bold text-gray-400 uppercase flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {formatFecha(sesion.fecha_sesion)}
+                              <Calendar className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{formatFecha(sesion.fecha_sesion)}</span>
                             </span>
                             {sesion.tematica && (
                               <>
-                                <span className="text-gray-300">•</span>
-                                <span className="text-[11px] font-medium text-amber-600 italic truncate max-w-[200px]">
+                                <span className="text-gray-300 hidden sm:inline">•</span>
+                                <span className="text-[11px] font-medium text-amber-600 italic truncate max-w-xs block w-full sm:w-auto sm:inline">
                                   {sesion.tematica}
                                 </span>
                               </>
@@ -604,8 +604,8 @@ export default function SesionesPage() {
                       </div>
                     </div>
 
-                    <div className="bg-gray-50/50 md:border-l border-gray-100 flex items-center px-6 py-3 md:py-0">
-                      <div className="flex items-center gap-6">
+                    <div className="bg-gray-50/50 md:border-l border-t md:border-t-0 border-gray-100 flex items-center px-4 py-3 md:px-6 md:py-0 w-full md:w-auto justify-center">
+                      <div className="grid grid-cols-4 gap-1 sm:gap-4 w-full md:flex md:items-center md:gap-6 text-center">
                         <div className="flex flex-col items-center">
                           <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Inscritos</span>
                           <span className="text-sm font-black text-gray-700">{sesion.total_inscritos || 0}</span>
@@ -625,12 +625,12 @@ export default function SesionesPage() {
                       </div>
                     </div>
 
-                    <div className="p-4 flex items-center gap-2 md:border-l border-gray-100">
+                    <div className="p-4 flex items-center justify-between md:justify-start gap-2 border-t md:border-t-0 md:border-l border-gray-100 w-full md:w-auto">
                       <Button 
                         size="sm"
                         variant={sesion.bloqueada ? "outline" : "default"}
                         onClick={() => router.push(`/dashboard/sesiones/${sesion.id}/asistencia`)} 
-                        className={sesion.bloqueada ? "border-amber-200 text-amber-700 font-bold text-xs" : "bg-calipso-500 hover:bg-calipso-600 shadow-sm font-bold text-xs"}
+                        className={sesion.bloqueada ? "border-amber-200 text-amber-700 font-bold text-xs flex-1 md:flex-initial" : "bg-calipso-500 hover:bg-calipso-600 shadow-sm font-bold text-xs flex-1 md:flex-initial"}
                       >
                         {sesion.bloqueada ? "Ver Auditoría" : "Asistencia"}
                       </Button>
@@ -638,7 +638,7 @@ export default function SesionesPage() {
                         <Button 
                           variant="ghost" 
                           size="icon"
-                          className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 shrink-0"
                           onClick={() => handleDeleteSesion(sesion.id)}
                         >
                           <Trash2 className="h-4 w-4" />

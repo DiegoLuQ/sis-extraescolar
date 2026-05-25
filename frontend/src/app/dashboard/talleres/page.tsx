@@ -268,23 +268,23 @@ export default function TalleresPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Talleres</h1>
           <p className="text-gray-500 mt-1">Gestión de actividades extraescolares</p>
         </div>
         {user?.rol !== 'monitor' && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <Button 
               variant="outline" 
-              className="border-calipso-200 text-calipso-700 hover:bg-calipso-50"
+              className="border-calipso-200 text-calipso-700 hover:bg-calipso-50 w-full sm:w-auto"
               onClick={() => router.push("/dashboard/talleres/clonacion")}
             >
               <Copy className="h-4 w-4 mr-2" />
               Abrir Nuevo Año
             </Button>
 
-            <Button variant="outline" onClick={handleDownloadTemplate} disabled={saving}>
+            <Button variant="outline" onClick={handleDownloadTemplate} disabled={saving} className="w-full sm:w-auto">
               <Download className="h-4 w-4 mr-2" />
               Descargar Planilla
             </Button>
@@ -300,6 +300,7 @@ export default function TalleresPage() {
               variant="outline" 
               onClick={() => document.getElementById('bulk-upload')?.click()}
               disabled={saving}
+              className="w-full sm:w-auto"
             >
               {saving ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -317,7 +318,7 @@ export default function TalleresPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="bg-calipso-500 hover:bg-calipso-600" disabled={saving}>
+                <Button className="bg-calipso-500 hover:bg-calipso-600 w-full sm:w-auto" disabled={saving}>
                   <Plus className="h-4 w-4 mr-2" />
                   Nuevo Taller
                 </Button>
@@ -649,14 +650,14 @@ export default function TalleresPage() {
 
       <Card className="border-0 shadow-md">
         <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-[200px]">
-              <Search className="h-4 w-4 text-gray-400" />
+          <div className="flex flex-wrap items-center justify-between gap-4 w-full">
+            <div className="flex items-center gap-3 flex-1 min-w-[200px] w-full">
+              <Search className="h-4 w-4 text-gray-400 shrink-0" />
               <Input
                 placeholder="Buscar talleres..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
+                className="w-full md:max-w-sm"
               />
             </div>
             

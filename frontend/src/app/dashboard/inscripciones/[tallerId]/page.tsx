@@ -208,29 +208,30 @@ export default function TallerInscripcionesDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" onClick={() => router.push("/dashboard/inscripciones")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">{tallerInfo.nombre_taller}</h1>
-          <p className="text-gray-500 mt-1">Lista de alumnos y monitoreo de asistencia</p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <Button variant="outline" size="icon" onClick={() => router.push("/dashboard/inscripciones")} className="shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 break-words">{tallerInfo.nombre_taller}</h1>
+            <p className="text-gray-500 mt-1 text-sm md:text-base">Lista de alumnos y monitoreo de asistencia</p>
+          </div>
         </div>
-        <div className="flex-1" />
         {user?.rol !== "monitor" && (
-          <Button onClick={handleOpenAddStudent} className="bg-indigo-600 hover:bg-indigo-700 shadow-md">
+          <Button onClick={handleOpenAddStudent} className="bg-indigo-600 hover:bg-indigo-700 shadow-md w-full md:w-auto">
             <UserPlus className="h-4 w-4 mr-2" />
             Inscribir Alumno
           </Button>
         )}
       </div>
 
-      <div className="flex gap-2 mb-2">
-        <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="text-calipso-600 border-calipso-200 hover:bg-calipso-50">
+      <div className="flex flex-wrap gap-2 mb-2 w-full">
+        <Button variant="outline" size="sm" onClick={handleDownloadTemplate} className="text-calipso-600 border-calipso-200 hover:bg-calipso-50 w-full sm:w-auto">
           <Download className="h-4 w-4 mr-2" />
           Descargar Plantilla
         </Button>
-        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={importing} className="border-calipso-200 hover:bg-calipso-50">
+        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={importing} className="border-calipso-200 hover:bg-calipso-50 w-full sm:w-auto">
           {importing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2 text-calipso-600" />}
           Importar Alumnos
         </Button>
@@ -238,7 +239,7 @@ export default function TallerInscripcionesDetailPage() {
           variant="outline" 
           size="sm" 
           onClick={handleExport} 
-          className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+          className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 w-full sm:w-auto"
         >
           <Download className="h-4 w-4 mr-2" />
           Exportar Excel

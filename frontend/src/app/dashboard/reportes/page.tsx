@@ -106,13 +106,13 @@ export default function ReportesPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Centro de Reportes</h1>
-          <p className="text-gray-500">Analítica de asistencia y participación escolar</p>
+          <p className="text-gray-500 text-sm mt-1">Analítica de asistencia y participación escolar</p>
         </div>
-        <div className="flex items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-calipso-500" />
+        <div className="flex items-center justify-between sm:justify-start gap-2 bg-white p-2 rounded-xl shadow-sm border border-gray-100 w-full md:w-auto">
+          <div className="flex items-center gap-1 sm:gap-2 flex-1 sm:flex-initial">
+            <Calendar className="h-4 w-4 text-calipso-500 shrink-0" />
             <Select value={mes} onValueChange={setMes}>
-              <SelectTrigger className="w-32 border-0 shadow-none focus:ring-0 font-bold">
+              <SelectTrigger className="w-full sm:w-28 border-0 shadow-none focus:ring-0 font-bold text-xs sm:text-sm h-9">
                 <SelectValue placeholder="Mes" />
               </SelectTrigger>
               <SelectContent>
@@ -122,24 +122,26 @@ export default function ReportesPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="h-4 w-px bg-gray-200" />
-          <Select value={anio} onValueChange={setAnio}>
-            <SelectTrigger className="w-24 border-0 shadow-none focus:ring-0 font-bold">
-              <SelectValue placeholder="Año" />
-            </SelectTrigger>
-            <SelectContent>
-              {years.map((y) => (
-                <SelectItem key={y} value={y}>{y}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="ghost" size="icon" onClick={fetchAllReports} className="text-calipso-500">
+          <div className="h-4 w-px bg-gray-200 shrink-0" />
+          <div className="flex-1 sm:flex-initial">
+            <Select value={anio} onValueChange={setAnio}>
+              <SelectTrigger className="w-full sm:w-20 border-0 shadow-none focus:ring-0 font-bold text-xs sm:text-sm h-9">
+                <SelectValue placeholder="Año" />
+              </SelectTrigger>
+              <SelectContent>
+                {years.map((y) => (
+                  <SelectItem key={y} value={y}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button variant="ghost" size="icon" onClick={fetchAllReports} className="text-calipso-500 h-9 w-9 shrink-0">
             <Filter className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card className="border-0 shadow-sm bg-calipso-500 text-white relative overflow-hidden">
           <CardContent className="pt-6">
             <div className="flex justify-between items-start z-10 relative">
@@ -150,7 +152,7 @@ export default function ReportesPage() {
                 </h3>
                 <p className="text-[10px] text-calipso-100 mt-2 italic">* Sumatoria de todos los inscritos activos</p>
               </div>
-              <div className="p-2 bg-white/20 rounded-lg">
+              <div className="p-2 bg-white/20 rounded-lg shrink-0">
                 <Users className="h-6 w-6 text-white" />
               </div>
             </div>
@@ -168,7 +170,7 @@ export default function ReportesPage() {
                    (annualData?.months?.length || 0)}
                 </h3>
               </div>
-              <div className="p-2 bg-blue-50 rounded-lg">
+              <div className="p-2 bg-blue-50 rounded-lg shrink-0">
                 <Calendar className="h-5 w-5 text-blue-500" />
               </div>
             </div>
@@ -190,7 +192,7 @@ export default function ReportesPage() {
                   )}
                 </h3>
               </div>
-              <div className="p-2 bg-orange-50 rounded-lg">
+              <div className="p-2 bg-orange-50 rounded-lg shrink-0">
                 <BarChart className="h-5 w-5 text-orange-500" />
               </div>
             </div>
@@ -217,7 +219,7 @@ export default function ReportesPage() {
                   )}
                 </h3>
               </div>
-              <div className="p-2 bg-green-50 rounded-lg">
+              <div className="p-2 bg-green-50 rounded-lg shrink-0">
                 <TrendingUp className="h-5 w-5 text-green-500" />
               </div>
             </div>
@@ -226,19 +228,19 @@ export default function ReportesPage() {
       </div>
 
       <Tabs defaultValue="mensual" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="bg-white border p-1 rounded-xl mb-6">
-          <TabsTrigger value="mensual" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white">Matriz Mensual</TabsTrigger>
-          <TabsTrigger value="semanal" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white">Resumen Semanal</TabsTrigger>
-          <TabsTrigger value="anual" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white">Consolidado Anual</TabsTrigger>
+        <TabsList className="bg-white border p-1 rounded-xl mb-6 w-full flex overflow-x-auto whitespace-nowrap justify-start md:justify-center gap-1 scrollbar-none">
+          <TabsTrigger value="mensual" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Matriz Mensual</TabsTrigger>
+          <TabsTrigger value="semanal" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Resumen Semanal</TabsTrigger>
+          <TabsTrigger value="anual" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Consolidado Anual</TabsTrigger>
         </TabsList>
 
         {/* CONTENIDO MENSUAL */}
         <TabsContent value="mensual" className="space-y-6">
           <Card className="border-0 shadow-md overflow-hidden bg-white">
-            <CardHeader className="flex flex-row items-center justify-between border-b border-gray-50 bg-gray-50/30">
-              <div className="flex items-center gap-4">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-50 bg-gray-50/30 gap-3 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
                 <CardTitle className="text-sm font-bold text-gray-600">Detalle de Asistencia por Taller</CardTitle>
-                <div className="flex items-center space-x-2 bg-gray-100/50 px-3 py-1.5 rounded-lg border">
+                <div className="flex items-center space-x-2 bg-gray-100/50 px-3 py-1.5 rounded-lg border w-fit">
                   <Checkbox 
                     id="show-daily" 
                     checked={showDailyDetail} 
@@ -252,7 +254,7 @@ export default function ReportesPage() {
                   </label>
                 </div>
               </div>
-              <Button variant="outline" size="sm" className="h-8 text-xs font-bold">
+              <Button variant="outline" size="sm" className="h-9 text-xs font-bold w-full sm:w-auto self-stretch sm:self-auto">
                 <FileDown className="h-3.5 w-3.5 mr-2" />
                 Exportar Excel
               </Button>
@@ -351,43 +353,45 @@ export default function ReportesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50/50">
-                    <TableHead className="font-bold text-gray-900">Período</TableHead>
-                    <TableHead className="text-center font-bold text-gray-900">Estudiantes Presentes (Acumulado)</TableHead>
-                    <TableHead className="text-center font-bold text-gray-900">Capacidad Teórica (Matrícula x Sesiones)</TableHead>
-                    <TableHead className="text-right font-bold text-gray-900">Porcentaje Asistencia</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {weeklyData?.weeks?.length > 0 ? (
-                    weeklyData.weeks.map((week: any) => (
-                      <TableRow key={week.week_label}>
-                        <TableCell className="font-bold text-gray-700">{week.week_label}</TableCell>
-                        <TableCell className="text-center font-medium text-gray-600">{week.presentes}</TableCell>
-                        <TableCell className="text-center text-gray-600 font-medium">
-                          {week.capacidad} <span className="text-[10px] text-gray-400 font-normal ml-1">Alumnos</span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={`px-2 py-1 rounded-full text-xs font-black ${
-                            week.porcentaje >= 80 ? "bg-green-100 text-green-700" : 
-                            week.porcentaje >= 60 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"
-                          }`}>
-                            {week.porcentaje}%
-                          </span>
+              <div className="overflow-x-auto w-full">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50/50">
+                      <TableHead className="font-bold text-gray-900">Período</TableHead>
+                      <TableHead className="text-center font-bold text-gray-900">Estudiantes Presentes (Acumulado)</TableHead>
+                      <TableHead className="text-center font-bold text-gray-900">Capacidad Teórica (Matrícula x Sesiones)</TableHead>
+                      <TableHead className="text-right font-bold text-gray-900">Porcentaje Asistencia</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {weeklyData?.weeks?.length > 0 ? (
+                      weeklyData.weeks.map((week: any) => (
+                        <TableRow key={week.week_label}>
+                          <TableCell className="font-bold text-gray-700">{week.week_label}</TableCell>
+                          <TableCell className="text-center font-medium text-gray-600">{week.presentes}</TableCell>
+                          <TableCell className="text-center text-gray-600 font-medium">
+                            {week.capacidad} <span className="text-[10px] text-gray-400 font-normal ml-1">Alumnos</span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className={`px-2 py-1 rounded-full text-xs font-black ${
+                              week.porcentaje >= 80 ? "bg-green-100 text-green-700" : 
+                              week.porcentaje >= 60 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"
+                            }`}>
+                              {week.porcentaje}%
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-10 text-gray-400 italic">
+                          No hay datos de asistencia registrados para este mes.
                         </TableCell>
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-10 text-gray-400 italic">
-                        No hay datos de asistencia registrados para este mes.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -402,46 +406,48 @@ export default function ReportesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50/50">
-                    <TableHead className="font-bold text-gray-900">Mes</TableHead>
-                    <TableHead className="text-center font-bold text-gray-900">Asistencia Acumulada</TableHead>
-                    <TableHead className="text-center font-bold text-gray-900">Capacidad Total</TableHead>
-                    <TableHead className="text-right font-bold text-gray-900">Rendimiento Anual</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {annualData?.months?.length > 0 ? (
-                    annualData.months.map((month: any) => (
-                      <TableRow key={month.month_label}>
-                        <TableCell className="font-bold text-gray-700">{month.month_label}</TableCell>
-                        <TableCell className="text-center font-medium text-gray-600">{month.presentes} alumnos</TableCell>
-                        <TableCell className="text-center font-medium text-gray-400">{month.capacidad}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            <div className="w-24 bg-gray-100 h-2 rounded-full overflow-hidden">
-                              <div 
-                                className="bg-calipso-500 h-full transition-all duration-500" 
-                                style={{ width: `${month.porcentaje}%` }}
-                              />
+              <div className="overflow-x-auto w-full">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50/50">
+                      <TableHead className="font-bold text-gray-900">Mes</TableHead>
+                      <TableHead className="text-center font-bold text-gray-900">Asistencia Acumulada</TableHead>
+                      <TableHead className="text-center font-bold text-gray-900">Capacidad Total</TableHead>
+                      <TableHead className="text-right font-bold text-gray-900">Rendimiento Anual</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {annualData?.months?.length > 0 ? (
+                      annualData.months.map((month: any) => (
+                        <TableRow key={month.month_label}>
+                          <TableCell className="font-bold text-gray-700">{month.month_label}</TableCell>
+                          <TableCell className="text-center font-medium text-gray-600">{month.presentes} alumnos</TableCell>
+                          <TableCell className="text-center font-medium text-gray-400">{month.capacidad}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-3">
+                              <div className="w-24 bg-gray-100 h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className="bg-calipso-500 h-full transition-all duration-500" 
+                                  style={{ width: `${month.porcentaje}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-black text-calipso-700 w-10">
+                                {month.porcentaje}%
+                              </span>
                             </div>
-                            <span className="text-sm font-black text-calipso-700 w-10">
-                              {month.porcentaje}%
-                            </span>
-                          </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-10 text-gray-400 italic">
+                          Inicie el registro de asistencia para visualizar el historial anual.
                         </TableCell>
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-10 text-gray-400 italic">
-                        Inicie el registro de asistencia para visualizar el historial anual.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

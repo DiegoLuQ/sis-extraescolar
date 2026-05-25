@@ -22,7 +22,7 @@ services:
       - DP_SENDER_EMAIL=${DP_SENDER_EMAIL}
       - DP_SENDER_PASSWORD=${DP_SENDER_PASSWORD}
     networks:
-      - red_pme
+      - base_red_pme
 
   frontend:
     build:
@@ -42,8 +42,8 @@ services:
       - VIRTUAL_HOST=${SERVER_IP:-186.64.122.223}
       - VIRTUAL_PORT=3000
     networks:
-      - red_pme
+      - base_red_pme
 
 networks:
-  red_pme:
+  base_red_pme:
     external: true

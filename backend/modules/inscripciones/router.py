@@ -118,3 +118,15 @@ def update_inscripcion(inscripcion_id: UUID, inscripcion: InscripcionUpdate, db:
     if not db_inscripcion:
         raise HTTPException(status_code=404, detail="Inscripción no encontrada")
     return db_inscripcion
+
+@router.delete("/{inscripcion_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_inscripcion(
+    inscripcion_id: UUID,
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    success = crud.delete_inscripcion(db, inscripcion_id, tenant.colegio_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Inscripción no encontrada")
+    return None
+

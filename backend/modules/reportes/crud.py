@@ -210,3 +210,137 @@ def get_annual_attendance_report(db: Session, colegio_id: str, anio: int):
         "total_presentes_anio": total_presentes_anio,
         "promedio_anual": round((total_presentes_anio / total_capacidad_anio * 100), 1) if total_capacidad_anio > 0 else 0
     }
+
+def get_weekly_summary_report(db: Session, colegio_id: str, semanas_atras: int = 0):
+    hoy = datetime.date.today()
+    
+    # Calcular el lunes de la semana actual (hoy - su día de la semana)
+    # hoy.weekday() es 0 para lunes, 6 para domingo
+    inicio_semana_actual = hoy - datetime.timedelta(days=hoy.weekday())
+    
+    # Aplicar el offset de semanas
+    inicio_semana_seleccionada = inicio_semana_actual - datetime.timedelta(weeks=semanas_atras)
+    fin_semana_seleccionada = inicio_semana_seleccionada + datetime.timedelta(days=4)  # Lunes a Viernes
+    
+    # Semana anterior relativa a la seleccionada
+    inicio_semana_anterior = inicio_semana_seleccionada - datetime.timedelta(weeks=1)
+    fin_semana_anterior = inicio_semana_anterior + datetime.timedelta(days=4)  # Lunes a Viernes
+    
+    # Rango extendido para incluir el día anterior (el domingo anterior)
+    rango_sel_inicio = inicio_semana_seleccionada - datetime.timedelta(days=1)
+    rango_ant_inicio = inicio_semana_anterior - datetime.timedelta(days=1)
+    
+    # Sesiones en las semanas respectivas (incluyendo el día anterior)
+    sesiones_seleccionadas = db.query(Sesion).filter(
+        Sesion.colegio_id == colegio_id,
+        Sesion.fecha_sesion >= rango_sel_inicio,
+        Sesion.fecha_sesion <= fin_semana_seleccionada
+    ).all()
+    
+    sesiones_anteriores = db.query(Sesion).filter(
+        Sesion.colegio_id == colegio_id,
+        Sesion.fecha_sesion >= rango_ant_inicio,
+        Sesion.fecha_sesion <= fin_semana_anterior
+    ).all()
+    
+    sesiones_hoy = db.query(Sesion).filter(
+        Sesion.colegio_id == colegio_id,
+        Sesion.fecha_sesion == hoy
+    ).all()
+    
+    # Obtener matrícula por taller
+    talleres = db.query(Taller).filter(Taller.colegio_id == colegio_id).all()
+    taller_ids = [t.id for t in talleres]
+    enrollment_map = {}
+    if taller_ids:
+        enrollment_query = db.query(Inscripcion.taller_id, func.count(Inscripcion.id).label("count")).filter(
+            Inscripcion.taller_id.in_(taller_ids),
+            Inscripcion.estado == EstadoInscripcionEnum.inscrito
+        ).group_by(Inscripcion.taller_id).all()
+        enrollment_map = {str(r.taller_id): r.count for r in enrollment_query}
+    
+    def get_attendance_for_sessions(sesion_ids):
+        if not sesion_ids:
+            return {}
+        res = db.query(
+            Asistencia.sesion_id,
+            func.count(Asistencia.id).label("presentes")
+        ).filter(
+            Asistencia.sesion_id.in_(sesion_ids),
+            Asistencia.estado_asistencia == "presente"
+        ).group_by(Asistencia.sesion_id).all()
+        return {str(row.sesion_id): row.presentes for row in res}
+    
+    asistencias_sel_map = get_attendance_for_sessions([s.id for s in sesiones_seleccionadas])
+    asistencias_ant_map = get_attendance_for_sessions([s.id for s in sesiones_anteriores])
+    asistencias_hoy_map = get_attendance_for_sessions([s.id for s in sesiones_hoy])
+    
+    total_hoy = sum(asistencias_hoy_map.values())
+    
+    dias_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+    
+    def build_weekly_list(inicio_lunes, sesiones_lista, asistencias_map):
+        days_list = []
+        date_to_sessions = {}
+        sesion_obj_map = {s.id: s for s in sesiones_lista}
+        
+        for s in sesiones_lista:
+            dt_str = s.fecha_sesion.strftime("%Y-%m-%d")
+            if dt_str not in date_to_sessions:
+                date_to_sessions[dt_str] = []
+            date_to_sessions[dt_str].append(s.id)
+            
+        for i in range(5):  # Lunes a Viernes
+            day_date = inicio_lunes + datetime.timedelta(days=i)
+            day_date_str = day_date.strftime("%Y-%m-%d")
+            session_ids = date_to_sessions.get(day_date_str, [])
+            presentes_dia = sum(asistencias_map.get(sid, 0) for sid in session_ids)
+            
+            # Calcular matrícula de los talleres con sesiones hoy
+            unique_taller_ids = set(sesion_obj_map[sid].taller_id for sid in session_ids if sid in sesion_obj_map)
+            matricula_total_dia = sum(enrollment_map.get(str(tid), 0) for tid in unique_taller_ids)
+            
+            porcentaje_asistencia = round((presentes_dia / matricula_total_dia) * 100, 1) if matricula_total_dia > 0 else 0.0
+            
+            # Obtener asistencia del día anterior
+            prev_date = day_date - datetime.timedelta(days=1)
+            prev_date_str = prev_date.strftime("%Y-%m-%d")
+            prev_session_ids = date_to_sessions.get(prev_date_str, [])
+            presentes_anterior = sum(asistencias_map.get(sid, 0) for sid in prev_session_ids)
+            
+            diferencia_anterior = None
+            if i > 0:  # No se calcula para el lunes
+                if presentes_anterior > 0:
+                    diferencia_anterior = round(((presentes_dia - presentes_anterior) / presentes_anterior) * 100, 1)
+                else:
+                    diferencia_anterior = 100.0 if presentes_dia > 0 else 0.0
+            
+            days_list.append({
+                "fecha": day_date_str,
+                "dia": dias_nombres[i],
+                "presentes": presentes_dia,
+                "matricula_total": matricula_total_dia,
+                "porcentaje_asistencia": porcentaje_asistencia,
+                "diferencia_anterior": diferencia_anterior
+            })
+        return days_list
+        
+    semana_actual_list = build_weekly_list(inicio_semana_seleccionada, sesiones_seleccionadas, asistencias_sel_map)
+    semana_anterior_list = build_weekly_list(inicio_semana_anterior, sesiones_anteriores, asistencias_ant_map)
+    
+    total_semana_actual = sum(d["presentes"] for d in semana_actual_list)
+    total_semana_anterior = sum(d["presentes"] for d in semana_anterior_list)
+    
+    comparativa_totales_porcentaje = None
+    if total_semana_anterior > 0:
+        comparativa_totales_porcentaje = round(((total_semana_actual - total_semana_anterior) / total_semana_anterior) * 100, 1)
+        
+    return {
+        "total_hoy": total_hoy,
+        "semana_actual": semana_actual_list,
+        "semana_anterior": semana_anterior_list,
+        "total_semana_actual": total_semana_actual,
+        "total_semana_anterior": total_semana_anterior,
+        "comparativa_totales_porcentaje": comparativa_totales_porcentaje
+    }
+

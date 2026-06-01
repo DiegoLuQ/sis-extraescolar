@@ -190,6 +190,23 @@ export default function TallerInscripcionesDetailPage() {
     }
   };
 
+  const handleEliminar = async (inscripcionId: string) => {
+    const ok = await confirmDialog({
+      title: "Eliminar inscripción",
+      description: "¿Eliminar completamente al alumno del taller? Esta acción es irreversible y borrará su registro.",
+      confirmText: "Eliminar",
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await inscripcionesApi.delete(inscripcionId);
+      toast.success("Inscripción eliminada correctamente");
+      await fetchData();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || "Error al eliminar la inscripción");
+    }
+  };
+
   const filteredStats = showHighAttendance 
     ? stats.filter(s => s.porcentaje_asistencia >= kpiThreshold)
     : stats;
@@ -369,16 +386,37 @@ export default function TallerInscripcionesDetailPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {item.estado === "inscrito" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => handleRetirar(item.inscripcion_id)}
-                        >
-                          Retirar
-                        </Button>
-                      )}
+                      <div className="flex justify-end gap-1">
+                        {item.estado === "inscrito" ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                              onClick={() => handleRetirar(item.inscripcion_id)}
+                            >
+                              Retirar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => handleEliminar(item.inscripcion_id)}
+                            >
+                              Eliminar
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => handleEliminar(item.inscripcion_id)}
+                          >
+                            Eliminar
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

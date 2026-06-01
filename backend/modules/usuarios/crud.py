@@ -16,8 +16,8 @@ def get_usuarios(
 ):
     from modules.talleres.models import Taller
     
-    query = db.query(Usuario)
-    
+    query = db.query(Usuario).filter(Usuario.is_active == True)
+
     # Si el filtro es por monitor, mostramos TODOS los monitores (según requerimiento de visibilidad global)
     if role_filter and role_filter.lower() == "monitor":
         query = query.filter(Usuario.rol == RolEnum.monitor).execution_options(skip_tenant_filter=True)

@@ -35,8 +35,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2, Loader2, Download, FileUp, BookOpen, Users, Copy } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2, Download, FileUp, BookOpen, Users, Copy, UserPlus } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
+
+function getSiglas(nombreColegio: string): string {
+  const palabras = nombreColegio.trim().split(/\s+/).filter(Boolean);
+  if (palabras.length === 1) return palabras[0].slice(0, 3).toLowerCase();
+  return palabras.map(p => p[0]).join('').toLowerCase();
+}
+
+function toSlug(nombre: string): string {
+  const sinAcentos = nombre.normalize('NFD').replace(/\p{Mn}/gu, '');
+  return sinAcentos
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .slice(0, 35);
+}
 
 export default function TalleresPage() {
   const router = useRouter();
@@ -49,6 +65,22 @@ export default function TalleresPage() {
   const [editingTaller, setEditingTaller] = useState<Taller | null>(null);
   const [saving, setSaving] = useState(false);
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
+  const [soloColegioActual, setSoloColegioActual] = useState(true);
+  const [editIsActive, setEditIsActive] = useState(true);
+
+  const [isImportarOpen, setIsImportarOpen] = useState(false);
+  const [talleresImportables, setTalleresImportables] = useState<Taller[]>([]);
+  const [importando, setImportando] = useState<string | null>(null);
+  const [loadingImportar, setLoadingImportar] = useState(false);
+
+  type OpcionImportar = {
+    taller: Taller;
+    siglas: string;
+    loginNombre: string;
+    nombre2: string;
+    colegio: Colegio;
+  };
+  const [opcionImportarTaller, setOpcionImportarTaller] = useState<OpcionImportar | null>(null);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 2030 - 2024 + 1 }, (_, i) => (2024 + i).toString());
@@ -100,7 +132,7 @@ export default function TalleresPage() {
         colegio_id: user?.rol !== "admin" ? (activeSchoolId || undefined) : formData.colegio_id,
       };
       if (editingTaller) {
-        await talleresApi.update(editingTaller.id, payload);
+        await talleresApi.update(editingTaller.id, { ...payload, is_active: editIsActive });
       } else {
         await talleresApi.create(payload);
       }
@@ -144,6 +176,10 @@ export default function TalleresPage() {
         hora_fin: h.hora_fin || "",
       })),
     });
+    const activoColegioId = localStorage.getItem("colegio_id");
+    const monitorEsDeEste = usuarios.find(u => u.id === taller.profesor_id)?.colegio_id === activoColegioId;
+    setSoloColegioActual(monitorEsDeEste);
+    setEditIsActive(taller.is_active);
     setIsDialogOpen(true);
   };
 
@@ -231,10 +267,111 @@ export default function TalleresPage() {
     setSelectedColegioId("");
   };
 
+  const handleOpenImportar = async () => {
+    setLoadingImportar(true);
+    setIsImportarOpen(true);
+    try {
+      const data = await talleresApi.getTalleresOtrosColegios();
+      setTalleresImportables(data);
+    } catch {
+      toast.error("Error al cargar talleres disponibles");
+      setIsImportarOpen(false);
+    } finally {
+      setLoadingImportar(false);
+    }
+  };
+
+  const handleImportar = (taller: Taller) => {
+    const activoId = localStorage.getItem("colegio_id");
+    const colegio = colegios.find(c => c.id === activoId);
+    if (!colegio || !activoId) { toast.error("No se pudo determinar el colegio activo"); return; }
+
+    const siglas = getSiglas(colegio.nombre_colegio);
+    const loginBase = `${siglas}_${toSlug(taller.nombre_taller)}`;
+    let loginNombre = loginBase;
+    let n = 2;
+    while (usuarios.some(u => u.nombre === loginNombre)) loginNombre = `${loginBase}_${n++}`;
+
+    const prefijo2 = `${siglas}_usuario_`;
+    const nums = usuarios
+      .map(u => u.nombre_2 || "")
+      .filter(v => v.startsWith(prefijo2))
+      .map(v => parseInt(v.replace(prefijo2, "")) || 0);
+    const nombre2 = `${prefijo2}${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+
+    setOpcionImportarTaller({ taller, siglas, loginNombre, nombre2, colegio });
+  };
+
+  const handleImportarMismoMonitor = async () => {
+    const opcion = opcionImportarTaller;
+    if (!opcion) return;
+    setOpcionImportarTaller(null);
+    const activoId = localStorage.getItem("colegio_id");
+    setImportando(opcion.taller.id);
+    try {
+      const nuevoTaller = await talleresApi.create({
+        nombre_taller: opcion.taller.nombre_taller,
+        profesor_id: opcion.taller.profesor_id,
+        cupos_maximos: 20,
+        periodo: opcion.taller.periodo,
+        colegio_id: activoId || undefined,
+      });
+      toast.success(`Taller importado con el monitor original`);
+      await fetchData();
+      setIsImportarOpen(false);
+      const tallerCompleto = await talleresApi.getById(nuevoTaller.id);
+      handleEdit(tallerCompleto);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al importar");
+    } finally {
+      setImportando(null);
+    }
+  };
+
+  const handleImportarNuevoUsuario = async () => {
+    const opcion = opcionImportarTaller;
+    if (!opcion) return;
+    setOpcionImportarTaller(null);
+    const activoId = localStorage.getItem("colegio_id");
+
+    const ok = await confirmDialog({
+      title: "Crear usuario monitor",
+      description: `Se creará el usuario "${opcion.loginNombre}" (nombre completo: ${opcion.nombre2}) con contraseña "${opcion.siglas}123" en ${opcion.colegio.nombre_colegio}. ¿Deseas continuar?`,
+      confirmText: "Crear y continuar",
+    });
+    if (!ok) return;
+
+    setImportando(opcion.taller.id);
+    try {
+      const nuevoUsuario = await usuariosApi.create({
+        nombre: opcion.loginNombre,
+        nombre_2: opcion.nombre2,
+        password: `${opcion.siglas}123`,
+        rol: "monitor",
+        colegio_id: activoId || undefined,
+      });
+      const nuevoTaller = await talleresApi.create({
+        nombre_taller: opcion.taller.nombre_taller,
+        profesor_id: nuevoUsuario.id,
+        cupos_maximos: 20,
+        periodo: opcion.taller.periodo,
+      });
+      toast.success(`Taller importado. Usuario: "${opcion.loginNombre}" · Clave: ${opcion.siglas}123`);
+      await fetchData();
+      setIsImportarOpen(false);
+      const tallerCompleto = await talleresApi.getById(nuevoTaller.id);
+      handleEdit(tallerCompleto);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al importar");
+    } finally {
+      setImportando(null);
+    }
+  };
+
   const resetForm = () => {
-    setFormData({ 
-      nombre_taller: "", 
-      profesor_id: "", 
+    setFormData({
+      nombre_taller: "",
+      profesor_id: "",
       cupos_maximos: 20,
       periodo: new Date().getFullYear(),
       cursos_asignados: "",
@@ -242,6 +379,8 @@ export default function TalleresPage() {
       horarios: [{ dia: "Lunes", hora_inicio: "", hora_fin: "" }],
     });
     setEditingTaller(null);
+    setSoloColegioActual(true);
+    setEditIsActive(true);
   };
 
   const getMonitor = (profesorId: string) => {
@@ -296,8 +435,8 @@ export default function TalleresPage() {
               accept=".xlsx"
               onChange={handleBulkUpload}
             />
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => document.getElementById('bulk-upload')?.click()}
               disabled={saving}
               className="w-full sm:w-auto"
@@ -308,6 +447,15 @@ export default function TalleresPage() {
                 <FileUp className="h-4 w-4 mr-2" />
               )}
               Importar Excel
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={handleOpenImportar}
+              className="border-calipso-200 text-calipso-700 hover:bg-calipso-50 w-full sm:w-auto"
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Importar de Otro Colegio
             </Button>
 
             <Dialog
@@ -382,7 +530,18 @@ export default function TalleresPage() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="profesor">Monitor Responsable</Label>
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="profesor">Monitor Responsable</Label>
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={!soloColegioActual}
+                              onChange={(e) => setSoloColegioActual(!e.target.checked)}
+                              className="h-3.5 w-3.5 rounded accent-calipso-500"
+                            />
+                            <span className="text-xs text-gray-500">Todos los colegios</span>
+                          </label>
+                        </div>
                         <Select
                           value={formData.profesor_id}
                           onValueChange={(value) =>
@@ -393,11 +552,35 @@ export default function TalleresPage() {
                             <SelectValue placeholder="Selecciona un monitor" />
                           </SelectTrigger>
                           <SelectContent>
-                            {usuarios.map((usuario) => (
-                              <SelectItem key={usuario.id} value={usuario.id}>
-                                {usuario.nombre} {usuario.nombre_2 ? `(${usuario.nombre_2})` : ""}
-                              </SelectItem>
-                            ))}
+                            {(() => {
+                              const activoColegioId = localStorage.getItem("colegio_id");
+                              const lista = soloColegioActual
+                                ? usuarios.filter(u => u.colegio_id === activoColegioId)
+                                : usuarios;
+                              if (lista.length === 0) {
+                                return (
+                                  <div className="px-3 py-4 text-sm text-center text-gray-400">
+                                    No hay monitores en este colegio
+                                  </div>
+                                );
+                              }
+                              return lista.map((usuario) => {
+                                const esDeOtroColegio = !soloColegioActual && usuario.colegio_id !== activoColegioId;
+                                const colegio = esDeOtroColegio
+                                  ? colegios.find(c => c.id === usuario.colegio_id)?.nombre_colegio
+                                  : null;
+                                return (
+                                  <SelectItem key={usuario.id} value={usuario.id}>
+                                    <span className="flex items-center gap-1.5">
+                                      {usuario.nombre_2 || usuario.nombre}
+                                      {colegio && (
+                                        <span className="text-[11px] text-gray-400 font-normal">— {colegio}</span>
+                                      )}
+                                    </span>
+                                  </SelectItem>
+                                );
+                              });
+                            })()}
                           </SelectContent>
                         </Select>
                       </div>
@@ -442,6 +625,23 @@ export default function TalleresPage() {
                           placeholder="Ej: 1ºA, 1ºB, 2ºA o Básica"
                         />
                       </div>
+                      {editingTaller && (
+                        <div className="space-y-2">
+                          <Label htmlFor="estado_taller">Estado</Label>
+                          <Select
+                            value={editIsActive ? "true" : "false"}
+                            onValueChange={(v) => setEditIsActive(v === "true")}
+                          >
+                            <SelectTrigger id="estado_taller">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="true">Activo</SelectItem>
+                              <SelectItem value="false">Inactivo</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
 
                     {/* Columna Derecha: Configuración de Horarios */}
@@ -645,6 +845,106 @@ export default function TalleresPage() {
               Comenzar Importación
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Elegir tipo de importación */}
+      <Dialog open={!!opcionImportarTaller} onOpenChange={(v) => { if (!v) setOpcionImportarTaller(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Cómo deseas importar el monitor?</DialogTitle>
+            <DialogDescription>
+              El taller <span className="font-semibold text-gray-800">{opcionImportarTaller?.taller.nombre_taller}</span> pertenece a{" "}
+              <span className="font-semibold text-gray-800">{opcionImportarTaller?.taller.nombre_colegio}</span>
+              {opcionImportarTaller?.taller.nombre_profesor && (
+                <> y está a cargo de <span className="font-semibold text-gray-800">{opcionImportarTaller.taller.nombre_profesor}</span></>
+              )}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <button
+              onClick={handleImportarMismoMonitor}
+              className="flex flex-col gap-1 text-left p-4 rounded-lg border border-calipso-200 bg-calipso-50/50 hover:bg-calipso-100/60 transition-colors"
+            >
+              <span className="font-semibold text-calipso-700 text-sm">Usar el mismo monitor</span>
+              <span className="text-xs text-gray-500">
+                El monitor <span className="font-mono">{opcionImportarTaller?.taller.nombre_profesor}</span> tendrá acceso a ambos colegios. No se crea ningún usuario nuevo.
+              </span>
+            </button>
+            <button
+              onClick={handleImportarNuevoUsuario}
+              className="flex flex-col gap-1 text-left p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <span className="font-semibold text-gray-700 text-sm">Crear nuevo usuario</span>
+              <span className="text-xs text-gray-500">
+                Se creará el login <span className="font-mono">{opcionImportarTaller?.loginNombre}</span> con contraseña <span className="font-mono">{opcionImportarTaller?.siglas}123</span>.
+              </span>
+            </button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpcionImportarTaller(null)}>Cancelar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Importar de Otro Colegio */}
+      <Dialog open={isImportarOpen} onOpenChange={setIsImportarOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-calipso-500" />
+              Importar Taller desde Otro Colegio
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona un taller. Se creará un usuario monitor y el taller en este colegio. Luego podrás completar horarios, cupos y cursos.
+            </DialogDescription>
+          </DialogHeader>
+          {loadingImportar ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-calipso-500" />
+            </div>
+          ) : talleresImportables.length === 0 ? (
+            <p className="text-center py-8 text-gray-400 text-sm">
+              No hay talleres disponibles para importar.
+            </p>
+          ) : (
+            <>
+              {(() => {
+                const activoId = localStorage.getItem("colegio_id");
+                const colegio = colegios.find(c => c.id === activoId);
+                const siglas = colegio ? getSiglas(colegio.nombre_colegio) : "???";
+                return (
+                  <p className="text-xs text-gray-500 bg-gray-50 rounded-md p-2.5 border border-gray-100">
+                    Prefijo de usuario: <span className="font-mono font-bold text-gray-700">{siglas}_</span>
+                    {" · "}Contraseña por defecto: <span className="font-mono font-bold text-gray-700">{siglas}123</span>
+                  </p>
+                );
+              })()}
+              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                {talleresImportables.map(taller => (
+                  <div key={taller.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm truncate">{taller.nombre_taller}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {taller.nombre_colegio} · {taller.periodo}
+                        {taller.nombre_profesor && ` · ${taller.nombre_profesor}`}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={importando === taller.id}
+                      onClick={() => handleImportar(taller)}
+                      className="ml-3 shrink-0 bg-calipso-500 hover:bg-calipso-600 text-white"
+                    >
+                      {importando === taller.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : "Importar"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

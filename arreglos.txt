@@ -1,0 +1,11 @@
+ok ver los talleres de cada monitor que deben tener disitntos alumnos y no los mismos
+
+ok agregar el poder al monitor de agregar alumnos a su taller de inmediato
+
+OK agregar los reportes de suma diaria total, suma de la semana total. 
+comparativa de cantidad de asistentes total de la semana con base al dia lunes.
+
+agregar un boton en el dashboard del coordinador para ver los alumnos que han faltado en un 70% de sus sesiones totales, debe tener el boton de retirar o eliminar alumno del taller. 
+
+
+OK la seccion de inscripciones sale el boton de retiro, debe salir el boton de eliminar para eliminarlo completamente del taller.

@@ -137,12 +137,18 @@ async def get_mis_colegios(
         return []
         
     elif tenant.rol == "monitor":
-        # Un monitor ve los colegios donde tiene talleres
-        colegio_ids = db.query(Taller.colegio_id).filter(Taller.profesor_id == tenant.usuario_id).distinct().all()
+        # Un monitor ve los colegios donde tiene talleres (cross-tenant para soportar monitores compartidos)
+        colegio_ids = (
+            db.query(Taller.colegio_id)
+            .filter(Taller.profesor_id == tenant.usuario_id)
+            .execution_options(skip_tenant_filter=True)
+            .distinct()
+            .all()
+        )
         ids = [c[0] for c in colegio_ids]
         if not ids:
             return []
-        return db.query(Colegio).filter(Colegio.id.in_(ids)).all()
+        return db.query(Colegio).filter(Colegio.id.in_(ids)).execution_options(skip_tenant_filter=True).all()
         
     return []
 

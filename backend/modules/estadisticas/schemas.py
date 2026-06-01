@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from uuid import UUID
-from typing import Optional
+from typing import List
 
 
 class TallerOcupacion(BaseModel):
@@ -20,9 +20,17 @@ class AusentismoTaller(BaseModel):
     porcentaje_ausentismo: float
 
 
+class TallerAusentismoDetalle(BaseModel):
+    nombre_taller: str
+    total_sesiones: int
+    ausencias: int
+    porcentaje_ausencia: float
+    taller_id: UUID
+    inscripcion_id: UUID
+
+
 class AlertaInasistencia(BaseModel):
     alumno_id: UUID
-    rut: str
     nombre_completo: str
-    taller: str
-    inasistencias_consecutivas: int
+    curso: str
+    talleres: List[TallerAusentismoDetalle]

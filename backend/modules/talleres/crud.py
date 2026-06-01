@@ -5,9 +5,22 @@ from modules.talleres.models import Taller, TallerHorario
 from modules.talleres.schemas import TallerCreate, TallerUpdate
 from modules.usuarios.models import Usuario
 from modules.alumnos.crud import format_rut
-from sqlalchemy import func
+from sqlalchemy import func, select
 from modules.inscripciones.models import Inscripcion, EstadoInscripcionEnum
 from modules.colegios.models import Colegio
+
+
+def _nombre_profesor_expr():
+    """Subquery correlated que obtiene el nombre del monitor sin pasar por with_loader_criteria.
+    Usa la tabla raw de usuarios para evitar que el filtro de tenant descarte monitores de otro colegio.
+    Prioriza nombre_2 (nombre visible) y cae a nombre (login) si está vacío."""
+    _ut = Usuario.__table__
+    return (
+        select(func.coalesce(_ut.c.nombre_2, _ut.c.nombre))
+        .where(_ut.c.id == Taller.profesor_id)
+        .correlate(Taller)
+        .scalar_subquery()
+    )
 
 
 def get_talleres(db: Session, colegio_id: UUID = None, skip: int = 0, limit: int = 100, usuario_id: str = None, rol: str = None):
@@ -20,13 +33,13 @@ def get_talleres(db: Session, colegio_id: UUID = None, skip: int = 0, limit: int
     )
 
     query = db.query(
-        Taller, 
+        Taller,
         func.coalesce(inscritos_subquery.c.count, 0).label("alumnos_inscritos"),
         Colegio.nombre_colegio,
-        Usuario.nombre_2.label("nombre_profesor")
+        _nombre_profesor_expr().label("nombre_profesor")
     ).outerjoin(inscritos_subquery, Taller.id == inscritos_subquery.c.taller_id)\
      .join(Colegio, Taller.colegio_id == Colegio.id)\
-     .outerjoin(Usuario, Taller.profesor_id == Usuario.id)
+     .filter(Taller.is_active == True)
 
     if colegio_id:
         query = query.filter(Taller.colegio_id == str(colegio_id))
@@ -49,9 +62,8 @@ def get_talleres(db: Session, colegio_id: UUID = None, skip: int = 0, limit: int
 
 def get_taller_by_id(db: Session, taller_id: UUID, colegio_id: str = None):
     # También incluimos el conteo y el nombre del colegio en el detalle por ID
-    query = db.query(Taller, Colegio.nombre_colegio, Usuario.nombre_2.label("nombre_profesor"))\
+    query = db.query(Taller, Colegio.nombre_colegio, _nombre_profesor_expr().label("nombre_profesor"))\
             .join(Colegio, Taller.colegio_id == Colegio.id)\
-            .outerjoin(Usuario, Taller.profesor_id == Usuario.id)\
             .filter(Taller.id == str(taller_id))
     
     if colegio_id:
@@ -75,6 +87,25 @@ def get_taller_by_id(db: Session, taller_id: UUID, colegio_id: str = None):
     db_taller.nombre_profesor = nombre_prof
         
     return db_taller
+
+
+def get_talleres_otros_colegios(db: Session, colegio_id: str = None):
+    query = (
+        db.query(Taller, Colegio.nombre_colegio, _nombre_profesor_expr().label("nombre_profesor"))
+        .join(Colegio, Taller.colegio_id == Colegio.id)
+        .filter(Taller.is_active == True)
+        .execution_options(skip_tenant_filter=True)
+    )
+    if colegio_id:
+        query = query.filter(Taller.colegio_id != str(colegio_id))
+    results = query.all()
+    talleres = []
+    for db_taller, nombre_co, nombre_prof in results:
+        db_taller.alumnos_inscritos = 0
+        db_taller.nombre_colegio = nombre_co
+        db_taller.nombre_profesor = nombre_prof
+        talleres.append(db_taller)
+    return talleres
 
 
 def get_taller_by_nombre(db: Session, nombre: str, colegio_id: str = None):

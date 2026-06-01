@@ -238,3 +238,13 @@ def bulk_upsert_inscripciones(db: Session, taller_id: str, colegio_id: str, data
             
     db.commit()
     return stats
+
+
+def delete_inscripcion(db: Session, inscripcion_id: UUID, escuela_id: str):
+    db_inscripcion = get_inscripcion_by_id(db, inscripcion_id, escuela_id)
+    if not db_inscripcion:
+        return False
+    db.delete(db_inscripcion)
+    db.commit()
+    return True
+

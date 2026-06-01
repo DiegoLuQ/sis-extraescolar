@@ -14,15 +14,51 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { confirmDialog, alertDialog } from "@/components/ui/confirm-dialog";
-import { 
-  Loader2, ArrowLeft, CheckCircle, XCircle, AlertTriangle, 
-  Save, User, ClipboardCheck, Lock, Unlock 
+import {
+  Loader2, ArrowLeft, CheckCircle, XCircle, AlertTriangle,
+  Save, User, ClipboardCheck, Lock, Unlock, UserPlus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/store/authStore";
+
+const LISTA_CURSOS = [
+  "PKºA", "PKºB", "KºA", "KºB",
+  "1ºA", "1ºB", "1ºC", "2°A", "2ºB", "2ºC",
+  "3ºA", "3ºB", "3ºC", "4ºA", "4ºB", "4ºC",
+  "5°A", "5°B", "5°C", "6°A", "6°B", "6°C",
+  "7°A", "7°B", "7°C", "8°A", "8°B", "8°C",
+  "1°M A", "1°M B", "1°M C", 
+  "2°M A", "2°M B", "2°M C", 
+  "3°M A", "3°M B", "3°M C", 
+  "4°M A", "4°M B", "4°M C"
+];
+
+const normalizeCourse = (c: string) => {
+  if (!c) return "";
+  return c
+    .toLowerCase()
+    .replace(/º/g, "°")
+    .replace(/\s+/g, "")
+    .trim();
+};
 
 export default function AsistenciaPage() {
   const { sesionId } = useParams() as { sesionId: string };
@@ -41,6 +77,13 @@ export default function AsistenciaPage() {
   const { user } = useAuthStore();
   const [userRole, setUserRole] = useState<string>("");
   const [togglingBloqueo, setTogglingBloqueo] = useState(false);
+
+  // Inscripción rápida desde la sesión
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
+  const [allAlumnos, setAllAlumnos] = useState<Alumno[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [enrollingId, setEnrollingId] = useState<string | null>(null);
 
   useEffect(() => {
     let r = user?.rol?.toLowerCase() || "";
@@ -67,6 +110,34 @@ export default function AsistenciaPage() {
       setAbsentFromSchool(data);
     } catch (error) {
       console.error("Error fetching absent from school:", error);
+    }
+  };
+
+  const handleOpenAddStudent = async () => {
+    try {
+      const data = await alumnosApi.getAll(0, 5000, undefined, true);
+      setAllAlumnos(data.sort((a, b) => a.nombre_completo.localeCompare(b.nombre_completo, "es")));
+    } catch {
+      toast.error("Error al cargar el listado de alumnos");
+      return;
+    }
+    setSearchQuery("");
+    setSelectedCourse("");
+    setIsAddStudentOpen(true);
+  };
+
+  const handleEnroll = async (alumnoId: string) => {
+    if (!sesion) return;
+    setEnrollingId(alumnoId);
+    try {
+      await inscripcionesApi.create({ taller_id: sesion.taller_id, alumno_id: alumnoId });
+      toast.success("Alumno inscrito correctamente");
+      setIsAddStudentOpen(false);
+      await fetchData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al inscribir al alumno");
+    } finally {
+      setEnrollingId(null);
     }
   };
 
@@ -323,10 +394,23 @@ export default function AsistenciaPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-2 border-0 shadow-lg">
           <CardHeader className="border-b bg-gray-50/50">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-calipso-500" />
-              Listado de Alumnos
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-calipso-500" />
+                Listado de Alumnos
+              </CardTitle>
+              {!isLockedForCurrentUser && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenAddStudent}
+                  className="gap-2 text-calipso-600 border-calipso-200 hover:bg-calipso-50"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Inscribir Alumno
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -513,6 +597,108 @@ export default function AsistenciaPage() {
           )}
         </div>
       </div>
+
+      {/* Modal de inscripción rápida */}
+      <Dialog open={isAddStudentOpen} onOpenChange={setIsAddStudentOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-calipso-500" />
+              Inscribir Alumno al Taller
+            </DialogTitle>
+            <DialogDescription>
+              Busca por nombre o RUT. El alumno quedará inscrito en{" "}
+              <span className="font-semibold text-gray-700">{taller?.nombre_taller}</span> y
+              podrás marcar su asistencia de inmediato.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex-1">
+              <Input
+                autoFocus
+                placeholder="Buscar por nombre..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="w-full sm:w-[180px]">
+              <Select
+                value={selectedCourse || "__all__"}
+                onValueChange={(v) => setSelectedCourse(v === "__all__" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por curso..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  <SelectItem value="__all__">Todos los cursos</SelectItem>
+                  {LISTA_CURSOS.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto space-y-1 pr-1">
+            {(() => {
+              const enrolledIds = new Set(inscripciones.map((i) => i.alumno_id));
+              const q = searchQuery.toLowerCase().trim();
+
+              const filtered = allAlumnos.filter((a) => {
+                if (enrolledIds.has(a.id)) return false;
+                if (selectedCourse && normalizeCourse(a.curso) !== normalizeCourse(selectedCourse)) return false;
+                if (q && !a.nombre_completo.toLowerCase().includes(q) && !a.rut.toLowerCase().includes(q)) return false;
+                return true;
+              });
+
+              const shouldShow = !!selectedCourse || !!q;
+
+              if (!shouldShow) {
+                return (
+                  <p className="text-center py-6 text-sm text-gray-400">
+                    Selecciona un curso o escribe un nombre para buscar.
+                  </p>
+                );
+              }
+
+              if (filtered.length === 0) {
+                return (
+                  <p className="text-center py-6 text-sm text-gray-400">
+                    No se encontraron alumnos disponibles.
+                  </p>
+                );
+              }
+
+              return filtered.map((alu) => (
+                <div
+                  key={alu.id}
+                  className="flex items-center justify-between p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-gray-800 truncate">
+                      {alu.nombre_completo}
+                    </span>
+                    <span className="text-xs text-gray-400">{alu.curso}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={enrollingId === alu.id}
+                    onClick={() => handleEnroll(alu.id)}
+                    className="ml-3 shrink-0 bg-calipso-500 hover:bg-calipso-600 text-white"
+                  >
+                    {enrollingId === alu.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      "Inscribir"
+                    )}
+                  </Button>
+                </div>
+              ));
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

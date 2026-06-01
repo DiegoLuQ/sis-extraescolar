@@ -393,7 +393,10 @@ export default function SesionesPage() {
                                 {taller.nombre_colegio}
                               </span>
                               <span className="text-gray-400">
-                                Monitor: <span className="text-gray-600 font-medium">{taller.nombre_profesor || "No asignado"}</span>
+                                Monitor: <span className="text-gray-600 font-medium">
+                                  {taller.nombre_profesor ||
+                                    (taller.profesor_id === user?.id ? (user?.nombre_2 || user?.nombre) : "No asignado")}
+                                </span>
                               </span>
                             </div>
                           </div>
@@ -413,7 +416,10 @@ export default function SesionesPage() {
                     </div>
                     <div>
                       <p className="text-[10px] text-calipso-600 font-bold uppercase tracking-wider">Monitor</p>
-                      <p className="text-gray-900 font-medium">{selectedTallerData.nombre_profesor || "No asignado"}</p>
+                      <p className="text-gray-900 font-medium">
+                        {selectedTallerData.nombre_profesor ||
+                          (selectedTallerData.profesor_id === user?.id ? (user?.nombre_2 || user?.nombre) : "No asignado")}
+                      </p>
                     </div>
                     <div>
                       <p className="text-[10px] text-calipso-600 font-bold uppercase tracking-wider">Horario</p>

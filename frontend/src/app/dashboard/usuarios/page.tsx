@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { usuariosApi, colegiosApi } from "@/lib/api";
+import { usuariosApi, colegiosApi, talleresApi } from "@/lib/api";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
-import type { Usuario, UsuarioCreate, Colegio } from "@/types";
+import type { Usuario, UsuarioCreate, Colegio, Taller } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2, Users } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
 export default function UsuariosPage() {
@@ -56,6 +56,12 @@ export default function UsuariosPage() {
     colegio_id: undefined,
   });
   const [editIsActive, setEditIsActive] = useState<boolean>(true);
+
+  const [isOtrosMonitoresOpen, setIsOtrosMonitoresOpen] = useState(false);
+  const [monitoresCompartidos, setMonitoresCompartidos] = useState<{ monitor: Usuario; talleres: Taller[] }[]>([]);
+  const [desasignando, setDesasignando] = useState<string | null>(null);
+
+  const [loadingModal, setLoadingModal] = useState(false);
 
   useEffect(() => {
     fetchUsuarios();
@@ -171,6 +177,51 @@ export default function UsuariosPage() {
     setEditingUsuario(null);
   };
 
+  const handleOpenOtrosMonitores = async () => {
+    setLoadingModal(true);
+    setIsOtrosMonitoresOpen(true);
+    try {
+      const activoId = localStorage.getItem("colegio_id");
+      const [todosMonitores, talleresColegio] = await Promise.all([
+        usuariosApi.getAll(0, 200, "monitor"),
+        talleresApi.getAll(),
+      ]);
+      const externos = todosMonitores
+        .filter(m => m.colegio_id !== activoId)
+        .filter(m => talleresColegio.some(t => t.profesor_id === m.id));
+      setMonitoresCompartidos(externos.map(m => ({
+        monitor: m,
+        talleres: talleresColegio.filter(t => t.profesor_id === m.id),
+      })));
+    } catch {
+      toast.error("Error al cargar monitores compartidos");
+      setIsOtrosMonitoresOpen(false);
+    } finally {
+      setLoadingModal(false);
+    }
+  };
+
+  const handleDesasignar = async (monitor: Usuario, talleres: Taller[]) => {
+    const nombres = talleres.map(t => `"${t.nombre_taller}"`).join(", ");
+    const ok = await confirmDialog({
+      title: "Desasignar Monitor",
+      description: `Se eliminarán los talleres ${nombres} de ${monitor.nombre_2 || monitor.nombre} en este colegio.`,
+      confirmText: "Desasignar",
+      destructive: true,
+    });
+    if (!ok) return;
+    setDesasignando(monitor.id);
+    try {
+      await Promise.all(talleres.map(t => talleresApi.delete(t.id)));
+      toast.success("Monitor desasignado correctamente");
+      setMonitoresCompartidos(prev => prev.filter(mc => mc.monitor.id !== monitor.id));
+    } catch {
+      toast.error("Error al desasignar el monitor");
+    } finally {
+      setDesasignando(null);
+    }
+  };
+
   const filteredUsuarios = usuarios.filter(
     (u) =>
       u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -207,6 +258,15 @@ export default function UsuariosPage() {
           <h1 className="text-3xl font-bold text-gray-900">Usuarios</h1>
           <p className="text-gray-500 mt-1">Gestión de usuarios del sistema</p>
         </div>
+        <div className="flex items-center gap-2">
+          {(user?.rol === "admin" || user?.rol === "coordinador") && (
+            <>
+              <Button variant="outline" onClick={handleOpenOtrosMonitores} className="border-gray-200">
+                <Users className="h-4 w-4 mr-2" />
+                Otros Monitores
+              </Button>
+            </>
+          )}
         <Dialog
           open={isDialogOpen}
           onOpenChange={(open) => {
@@ -375,7 +435,61 @@ export default function UsuariosPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      {/* Modal: Otros Monitores */}
+      <Dialog open={isOtrosMonitoresOpen} onOpenChange={setIsOtrosMonitoresOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-calipso-500" />
+              Monitores de Otros Colegios
+            </DialogTitle>
+            <DialogDescription>
+              Monitores con cuenta en otro colegio que tienen talleres asignados en este colegio.
+            </DialogDescription>
+          </DialogHeader>
+          {loadingModal ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-calipso-500" />
+            </div>
+          ) : monitoresCompartidos.length === 0 ? (
+            <p className="text-center py-8 text-gray-400 text-sm">
+              No hay monitores compartidos en este colegio.
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {monitoresCompartidos.map(({ monitor, talleres }) => (
+                <div key={monitor.id} className="flex items-start justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm">{monitor.nombre_2 || monitor.nombre}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Login: <span className="font-mono">{monitor.nombre}</span> · {getNombreColegio(monitor.colegio_id)}
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {talleres.map(t => (
+                        <Badge key={t.id} variant="secondary" className="text-[11px]">{t.nombre_taller}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0 ml-3"
+                    disabled={desasignando === monitor.id}
+                    onClick={() => handleDesasignar(monitor, talleres)}
+                  >
+                    {desasignando === monitor.id
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Trash2 className="h-4 w-4" />}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Card className="border-0 shadow-md">
         <CardHeader>

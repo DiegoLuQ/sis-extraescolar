@@ -111,10 +111,11 @@ def list_alumnos(
     skip: int = 0,
     limit: int = 5000,
     taller_id: Optional[UUID] = None,
+    for_enrollment: bool = False,
     db: Session = Depends(get_db),
     tenant: TenantContext = Depends(get_current_tenant)
 ):
-    return crud.get_alumnos(db, tenant.colegio_id, skip=skip, limit=limit, usuario_id=tenant.usuario_id, rol=tenant.rol, taller_id=taller_id)
+    return crud.get_alumnos(db, tenant.colegio_id, skip=skip, limit=limit, usuario_id=tenant.usuario_id, rol=tenant.rol, taller_id=taller_id, for_enrollment=for_enrollment)
 
 
 @router.get("/stats")

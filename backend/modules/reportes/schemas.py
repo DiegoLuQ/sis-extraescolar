@@ -25,3 +25,20 @@ class AnnualReportResponse(BaseModel):
     total_enrollment: int
     total_presentes_anio: int
     promedio_anual: float
+
+class WeeklyComparisonDay(BaseModel):
+    fecha: str
+    dia: str
+    presentes: int
+    matricula_total: int
+    porcentaje_asistencia: float
+    diferencia_anterior: Optional[float] = None
+
+class WeeklySummaryResponse(BaseModel):
+    total_hoy: int
+    semana_actual: List[WeeklyComparisonDay]
+    semana_anterior: List[WeeklyComparisonDay]
+    total_semana_actual: int
+    total_semana_anterior: int
+    comparativa_totales_porcentaje: Optional[float] = None
+

@@ -26,33 +26,30 @@ def format_rut(rut: str) -> str:
     return f"{cuerpo}-{dv}"
 
 
-def get_alumnos(db: Session, colegio_id: UUID = None, skip: int = 0, limit: int = 100, usuario_id: str = None, rol: str = None, taller_id: UUID = None):
+def get_alumnos(db: Session, colegio_id: UUID = None, skip: int = 0, limit: int = 100, usuario_id: str = None, rol: str = None, taller_id: UUID = None, for_enrollment: bool = False):
     from modules.talleres.models import Taller
     from modules.inscripciones.models import Inscripcion, EstadoInscripcionEnum
-    
+
     query = db.query(Alumno).filter(Alumno.is_active == True)
     if colegio_id:
         query = query.filter(Alumno.colegio_id == str(colegio_id))
-    
+
     if taller_id:
         query = query.join(Inscripcion, Inscripcion.alumno_id == Alumno.id)\
                      .filter(Inscripcion.taller_id == str(taller_id))\
                      .filter(Inscripcion.estado == EstadoInscripcionEnum.inscrito)
-    
-    if rol == "monitor" and usuario_id:
-        # Si ya se filtró por taller_id, no es estrictamente necesario volver a unir con Taller
-        # pero mantenemos la lógica de seguridad por si no se pasó taller_id
+
+    if rol == "monitor" and usuario_id and not for_enrollment:
         if not taller_id:
             query = query.join(Inscripcion, Inscripcion.alumno_id == Alumno.id)\
                          .join(Taller, Taller.id == Inscripcion.taller_id)\
                          .filter(Taller.profesor_id == str(usuario_id))\
                          .filter(Inscripcion.estado == EstadoInscripcionEnum.inscrito)
         else:
-            # Si hay taller_id, asegurarnos que ese taller le pertenece al monitor
             taller_pertence = db.query(Taller).filter(Taller.id == str(taller_id), Taller.profesor_id == str(usuario_id)).first()
             if not taller_pertence:
-                return [] # No tiene acceso a este taller
-    
+                return []
+
     return query.distinct().offset(skip).limit(limit).all()
 
 

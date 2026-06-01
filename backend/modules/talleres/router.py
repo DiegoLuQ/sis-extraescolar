@@ -149,6 +149,16 @@ def list_talleres(
     return crud.get_talleres(db, tenant.colegio_id, skip=skip, limit=limit, usuario_id=tenant.usuario_id, rol=tenant.rol)
 
 
+@router.get("/otros-colegios", response_model=List[TallerResponse])
+def list_talleres_otros_colegios(
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    if tenant.rol == "monitor":
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    return crud.get_talleres_otros_colegios(db, tenant.colegio_id)
+
+
 @router.get("/{taller_id}", response_model=TallerResponse)
 def get_taller(taller_id: UUID, db: Session = Depends(get_db), tenant: TenantContext = Depends(get_current_tenant)):
     db_taller = crud.get_taller_by_id(db, taller_id, tenant.colegio_id)

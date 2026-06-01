@@ -25,7 +25,7 @@ import {
   TabsList, 
   TabsTrigger 
 } from "../../../components/ui/tabs";
-import { Loader2, FileDown, Calendar, Users, TrendingUp, Filter, BarChart } from "lucide-react";
+import { Loader2, FileDown, Calendar, Users, TrendingUp, Filter, BarChart, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Activity, Sparkles } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
@@ -39,6 +39,10 @@ export default function ReportesPage() {
   const [anio, setAnio] = useState<string>(new Date().getFullYear().toString());
 
   const [showDailyDetail, setShowDailyDetail] = useState<boolean>(true);
+  
+  const [semanasAtras, setSemanasAtras] = useState<number>(0);
+  const [resumenSemana, setResumenSemana] = useState<any>(null);
+  const [loadingSemana, setLoadingSemana] = useState<boolean>(false);
 
   const meses = [
     { value: "1", label: "Enero" },
@@ -58,9 +62,26 @@ export default function ReportesPage() {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 2030 - 2024 + 1 }, (_, i) => (2024 + i).toString());
 
+  const fetchResumenSemana = async (atras: number) => {
+    setLoadingSemana(true);
+    try {
+      const data = await reportesApi.getResumenSemana(atras);
+      setResumenSemana(data);
+    } catch (error) {
+      console.error("Error fetching weekly summary:", error);
+      toast.error("Error al cargar el resumen semanal");
+    } finally {
+      setLoadingSemana(false);
+    }
+  };
+
   useEffect(() => {
     fetchAllReports();
   }, [mes, anio]);
+
+  useEffect(() => {
+    fetchResumenSemana(semanasAtras);
+  }, [semanasAtras]);
 
   const fetchAllReports = async () => {
     setLoading(true);
@@ -223,6 +244,165 @@ export default function ReportesPage() {
                 <TrendingUp className="h-5 w-5 text-green-500" />
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* SECCIÓN NUEVA: RESUMEN SEMANAL Y DIARIO */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-6">
+        {/* Tarjeta de Asistencia de Hoy */}
+        <Card className="border-0 shadow-md bg-gradient-to-br from-calipso-600 via-calipso-500 to-cyan-500 text-white relative overflow-hidden flex flex-col justify-between p-6">
+          <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 opacity-10 pointer-events-none">
+            <Activity className="h-64 w-64" />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <span className="bg-white/20 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full backdrop-blur-sm">
+                Hoy: {new Date().toLocaleDateString("es-CL", { weekday: 'long', day: 'numeric', month: 'short' })}
+              </span>
+              <div className="p-2 bg-white/10 rounded-xl backdrop-blur-sm">
+                <Sparkles className="h-5 w-5 text-yellow-300" />
+              </div>
+            </div>
+            <p className="text-calipso-100 text-xs font-bold uppercase tracking-wider">Asistencia Total de Hoy</p>
+            <h3 className="text-5xl font-black mt-2 tracking-tight">
+              {resumenSemana ? resumenSemana.total_hoy : 0}
+            </h3>
+            <p className="text-xs text-calipso-100/90 mt-2">
+              Estudiantes registrados como presentes en los talleres de la fecha actual.
+            </p>
+          </div>
+          <div className="border-t border-white/10 pt-4 mt-6 flex justify-between items-center text-xs text-calipso-100">
+            <span>Semana Seleccionada: <strong>{resumenSemana?.total_semana_actual || 0}</strong> asistencias</span>
+            {resumenSemana?.comparativa_totales_porcentaje !== null && (
+              <span className="flex items-center gap-1">
+                {resumenSemana?.comparativa_totales_porcentaje >= 0 ? (
+                  <ArrowUpRight className="h-3.5 w-3.5 text-green-300" />
+                ) : (
+                  <ArrowDownRight className="h-3.5 w-3.5 text-red-300" />
+                )}
+                <span className={resumenSemana?.comparativa_totales_porcentaje >= 0 ? "text-green-300 font-bold" : "text-red-300 font-bold"}>
+                  {resumenSemana?.comparativa_totales_porcentaje >= 0 ? "+" : ""}{resumenSemana?.comparativa_totales_porcentaje}%
+                </span>
+                vs sem. anterior
+              </span>
+            )}
+          </div>
+        </Card>
+
+        {/* Panel de Asistencia Semanal Interactiva */}
+        <Card className="border-0 shadow-md bg-white lg:col-span-2 overflow-hidden flex flex-col justify-between">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-gray-50 pb-4">
+            <div>
+              <CardTitle className="text-md font-bold text-gray-800 flex items-center gap-2">
+                <Activity className="h-4.5 w-4.5 text-calipso-500" />
+                Desglose Semanal & Comparativa Día Anterior
+              </CardTitle>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {resumenSemana?.semana_actual?.length > 0 
+                  ? `Periodo: ${new Date(resumenSemana.semana_actual[0].fecha + "T00:00:00").toLocaleDateString("es-CL", { day: 'numeric', month: 'short' })} al ${new Date(resumenSemana.semana_actual[resumenSemana.semana_actual.length - 1].fecha + "T00:00:00").toLocaleDateString("es-CL", { day: 'numeric', month: 'short', year: 'numeric' })}`
+                  : 'Cargando fechas...'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-100">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-gray-600 hover:bg-white hover:shadow-sm" 
+                onClick={() => setSemanasAtras(prev => prev + 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-black text-gray-700 px-2 min-w-[100px] text-center select-none">
+                {semanasAtras === 0 ? "Semana Actual" : `Hace ${semanasAtras} ${semanasAtras === 1 ? 'semana' : 'semanas'}`}
+              </span>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-gray-600 hover:bg-white hover:shadow-sm" 
+                onClick={() => setSemanasAtras(prev => Math.max(0, prev - 1))}
+                disabled={semanasAtras === 0}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6 flex-1 flex flex-col justify-center">
+            {loadingSemana ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-calipso-500" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {resumenSemana?.semana_actual?.map((day: any) => {
+                  const isMonday = day.dia === "Lunes";
+                  return (
+                    <div 
+                      key={day.fecha} 
+                      className={`flex flex-col justify-between p-3 rounded-2xl border transition-all hover:shadow-sm ${
+                        day.fecha === new Date().toISOString().split('T')[0]
+                          ? "bg-calipso-50/50 border-calipso-200 ring-1 ring-calipso-200"
+                          : "bg-gray-50/30 border-gray-100 hover:bg-gray-50/60"
+                      }`}
+                    >
+                      <div className="text-center">
+                        <span className="text-[10px] uppercase font-black text-gray-400 block tracking-wider">
+                          {day.dia}
+                        </span>
+                        <span className="text-xs text-gray-500 font-medium block mt-0.5">
+                          {new Date(day.fecha + "T00:00:00").toLocaleDateString("es-CL", { day: 'numeric', month: 'numeric' })}
+                        </span>
+                      </div>
+
+                      <div className="my-3 text-center">
+                        <span className="text-2xl font-black text-gray-800 tracking-tight">
+                          {day.presentes}
+                        </span>
+                        <span className="text-[9px] text-gray-400 block mt-0.5">asistentes</span>
+                        
+                        <div className="mt-2 pt-2 border-t border-gray-100/50">
+                          <span className="text-[11px] font-bold text-gray-600 block">
+                            Matrícula: {day.matricula_total}
+                          </span>
+                          <span className="text-[11px] font-extrabold text-calipso-600 block mt-0.5">
+                            {day.porcentaje_asistencia}% Asist.
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-center h-5">
+                        {!isMonday && day.diferencia_anterior !== null ? (
+                          (() => {
+                            const diff = day.diferencia_anterior;
+                            if (diff > 0) {
+                              return (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                                  <ArrowUpRight className="h-3 w-3 text-emerald-600 shrink-0" />
+                                  +{diff}%
+                                </span>
+                              );
+                            } else if (diff < 0) {
+                              return (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">
+                                  <ArrowDownRight className="h-3 w-3 text-rose-600 shrink-0" />
+                                  {diff}%
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                                  0%
+                                </span>
+                              );
+                            }
+                          })()
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -206,12 +206,20 @@ export interface AusentismoTaller {
   porcentaje_ausentismo: number;
 }
 
+export interface TallerAusentismoDetalle {
+  nombre_taller: string;
+  total_sesiones: number;
+  ausencias: number;
+  porcentaje_ausencia: number;
+  taller_id: string;
+  inscripcion_id: string;
+}
+
 export interface AlertaInasistencia {
   alumno_id: UUID;
-  rut: string;
   nombre_completo: string;
-  taller: string;
-  inasistencias_consecutivas: number;
+  curso: string;
+  talleres: TallerAusentismoDetalle[];
 }
 
 export interface User {

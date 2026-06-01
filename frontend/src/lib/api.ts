@@ -111,9 +111,9 @@ export const usuariosApi = {
 };
 
 export const alumnosApi = {
-  getAll: async (skip = 0, limit = 5000, tallerId?: string): Promise<Alumno[]> => {
-    const response = await api.get<Alumno[]>('/api/alumnos', { 
-      params: { skip, limit, taller_id: tallerId } 
+  getAll: async (skip = 0, limit = 5000, tallerId?: string, forEnrollment?: boolean): Promise<Alumno[]> => {
+    const response = await api.get<Alumno[]>('/api/alumnos', {
+      params: { skip, limit, taller_id: tallerId, for_enrollment: forEnrollment || undefined }
     });
     return response.data;
   },
@@ -190,6 +190,10 @@ export const talleresApi = {
     });
   },
   getTemplate: () => api.get('/api/talleres/template', { responseType: 'blob' }),
+  getTalleresOtrosColegios: async (): Promise<Taller[]> => {
+    const response = await api.get<Taller[]>('/api/talleres/otros-colegios');
+    return response.data;
+  },
   clonarPeriodo: (data: { source_periodo: number, target_periodo: number, taller_ids: string[] }) => 
     api.post('/api/talleres/clonar-periodo', data),
 };
@@ -208,6 +212,9 @@ export const inscripcionesApi = {
   update: async (id: string, data: InscripcionUpdate): Promise<Inscripcion> => {
     const response = await api.patch<Inscripcion>(`/api/inscripciones/${id}`, data);
     return response.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/api/inscripciones/${id}`);
   },
   getResumen: () => api.get<any[]>('/api/inscripciones/resumen'),
   getStatsByTaller: (tallerId: string) => api.get<any[]>(`/api/inscripciones/taller/${tallerId}/stats`),
@@ -346,10 +353,8 @@ export const estadisticasApi = {
     const response = await api.get<AusentismoTaller[]>('/api/estadisticas/ausentismo');
     return response.data;
   },
-  alertasInasistencias: async (umbral = 3): Promise<AlertaInasistencia[]> => {
-    const response = await api.get<AlertaInasistencia[]>('/api/estadisticas/alertas-inasistencias', { 
-      params: { umbral } 
-    });
+  alertasInasistencias: async (): Promise<AlertaInasistencia[]> => {
+    const response = await api.get<AlertaInasistencia[]>('/api/estadisticas/alertas-inasistencias');
     return response.data;
   },
 };
@@ -365,6 +370,10 @@ export const reportesApi = {
   },
   getAsistenciaAnual: async (anio: number) => {
     const response = await api.get('/api/reportes/asistencia-anual', { params: { anio } });
+    return response.data;
+  },
+  getResumenSemana: async (semanasAtras: number = 0) => {
+    const response = await api.get('/api/reportes/resumen-semana', { params: { semanas_atras: semanasAtras } });
     return response.data;
   },
 };

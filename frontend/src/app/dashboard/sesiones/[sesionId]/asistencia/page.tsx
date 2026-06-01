@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -33,7 +34,7 @@ import { toast } from "sonner";
 import { confirmDialog, alertDialog } from "@/components/ui/confirm-dialog";
 import {
   Loader2, ArrowLeft, CheckCircle, XCircle, AlertTriangle,
-  Save, User, ClipboardCheck, Lock, Unlock, UserPlus
+  Save, User, ClipboardCheck, Lock, Unlock, Search, UserPlus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";

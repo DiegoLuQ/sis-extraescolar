@@ -45,7 +45,7 @@ function getSiglas(nombreColegio: string): string {
 }
 
 function toSlug(nombre: string): string {
-  const sinAcentos = nombre.normalize('NFD').replace(/\p{Mn}/gu, '');
+  const sinAcentos = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return sinAcentos
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')

@@ -6,7 +6,15 @@ from modules.inscripciones.models import Inscripcion, EstadoInscripcionEnum
 from modules.sesiones.models import Sesion
 from modules.asistencias.models import Asistencia, EstadoAsistenciaEnum
 from modules.alumnos.models import Alumno
-from modules.estadisticas.schemas import TallerOcupacion, AusentismoTaller, AlertaInasistencia, TallerAusentismoDetalle
+from modules.estadisticas.schemas import (
+    TallerOcupacion,
+    AusentismoTaller,
+    AlertaInasistencia,
+    TallerAusentismoDetalle,
+    AlumnoAsistenciaDetalle,
+    TallerAsistenciaResumen,
+    SesionAsistenciaItem,
+)
 
 
 def get_ocupacion_talleres(db: Session, escuela_id: UUID = None, usuario_id: str = None, rol: str = None):
@@ -140,9 +148,84 @@ def get_alertas_inasistencias(db: Session, escuela_id: UUID = None, usuario_id: 
             alumno_id=data["alumno"].id,
             nombre_completo=data["alumno"].nombre_completo,
             curso=data["alumno"].curso,
+            telefono=data["alumno"].telefono,
             talleres=data["talleres"],
         )
         for data in alumno_map.values()
     ]
     resultado.sort(key=lambda a: max(t.porcentaje_ausencia for t in a.talleres), reverse=True)
     return resultado
+
+
+def get_detalle_asistencia_alumno(db: Session, alumno_id: UUID, escuela_id: UUID = None):
+    """
+    Retorna el resumen de asistencia/inasistencia de un alumno en todos sus talleres
+    inscritos, desglosado por sesión (fecha y estado). Incluye los datos de contacto
+    del alumno (nombre, curso, rut, telefono).
+    """
+    alumno_query = db.query(Alumno).filter(Alumno.id == str(alumno_id))
+    if escuela_id:
+        alumno_query = alumno_query.filter(Alumno.colegio_id == str(escuela_id))
+    alumno = alumno_query.first()
+    if not alumno:
+        return None
+
+    inscripciones = (
+        db.query(Inscripcion)
+        .join(Taller, Taller.id == Inscripcion.taller_id)
+        .filter(
+            Inscripcion.alumno_id == str(alumno_id),
+            Inscripcion.estado == EstadoInscripcionEnum.inscrito,
+            Taller.is_active == True,
+        )
+        .all()
+    )
+
+    talleres_resumen = []
+    for inscripcion in inscripciones:
+        taller = db.query(Taller).filter(Taller.id == inscripcion.taller_id).first()
+        if not taller:
+            continue
+
+        sesiones = (
+            db.query(Sesion)
+            .filter(Sesion.taller_id == taller.id)
+            .order_by(Sesion.fecha_sesion)
+            .all()
+        )
+
+        items = []
+        counts = {"presente": 0, "ausente": 0, "justificado": 0, "atraso": 0, "sin_registro": 0}
+        for sesion in sesiones:
+            asistencia = db.query(Asistencia).filter(
+                Asistencia.sesion_id == sesion.id,
+                Asistencia.alumno_id == str(alumno_id),
+            ).first()
+            estado = asistencia.estado_asistencia.value if asistencia else "sin_registro"
+            counts[estado] = counts.get(estado, 0) + 1
+            items.append(SesionAsistenciaItem(
+                fecha=sesion.fecha_sesion,
+                tematica=sesion.tematica,
+                estado=estado,
+            ))
+
+        talleres_resumen.append(TallerAsistenciaResumen(
+            taller_id=taller.id,
+            nombre_taller=taller.nombre_taller,
+            total_sesiones=len(sesiones),
+            presentes=counts["presente"],
+            ausentes=counts["ausente"],
+            justificados=counts["justificado"],
+            atrasos=counts["atraso"],
+            sin_registro=counts["sin_registro"],
+            sesiones=items,
+        ))
+
+    return AlumnoAsistenciaDetalle(
+        alumno_id=alumno.id,
+        nombre_completo=alumno.nombre_completo,
+        rut=alumno.rut,
+        curso=alumno.curso,
+        telefono=alumno.telefono,
+        talleres=talleres_resumen,
+    )

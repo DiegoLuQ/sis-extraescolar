@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from uuid import UUID
-from typing import Optional
+from typing import Optional, List
 
 
 class UsuarioBase(BaseModel):
@@ -24,6 +24,11 @@ class UsuarioUpdate(BaseModel):
     rol: Optional[str] = None
     is_active: Optional[bool] = None
     colegio_id: Optional[UUID] = None
+
+
+class UsuarioBulkDelete(BaseModel):
+    ids: List[UUID]
+    permanente: bool = False  # True = borrado físico (solo admin); False = lógico
 
 
 class UsuarioResponse(UsuarioBase):

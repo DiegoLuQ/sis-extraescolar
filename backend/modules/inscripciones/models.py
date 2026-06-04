@@ -1,6 +1,6 @@
 import uuid
 import enum
-from sqlalchemy import Column, String, Boolean, ForeignKey, Enum
+from sqlalchemy import Column, String, Boolean, ForeignKey, Enum, Date
 from core.database import Base
 
 
@@ -17,3 +17,6 @@ class Inscripcion(Base):
     taller_id = Column(String(36), ForeignKey("talleres.id"), nullable=False)
     alumno_id = Column(String(36), ForeignKey("alumnos.id"), nullable=False)
     estado = Column(Enum(EstadoInscripcionEnum), nullable=False, default=EstadoInscripcionEnum.inscrito)
+    # Fechas para conservar el histórico exacto de la matrícula del taller.
+    fecha_inscripcion = Column(Date, nullable=True)
+    fecha_retiro = Column(Date, nullable=True)

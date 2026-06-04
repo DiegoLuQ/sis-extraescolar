@@ -42,3 +42,34 @@ class WeeklySummaryResponse(BaseModel):
     total_semana_anterior: int
     comparativa_totales_porcentaje: Optional[float] = None
 
+
+class TallerMetaItem(BaseModel):
+    taller_id: UUID
+    nombre_taller: str
+    asistencias: int           # nº de asistencias efectivas (presente+atraso+justificado)
+    registros: int             # total de registros (denominador: lista pasada)
+    porcentaje: float          # asistencias / registros * 100
+    meta: int                  # meta efectiva (taller o, en su defecto, colegio)
+    cumple: bool               # porcentaje >= meta
+
+
+class MetasTotal(BaseModel):
+    asistencias: int
+    registros: int
+    porcentaje: float
+    meta: int                  # meta global del colegio
+    cumple: bool
+
+
+class MetasSemana(BaseModel):
+    semana_inicio: str  # YYYY-MM-DD
+    semana_fin: str     # YYYY-MM-DD
+    items: List[TallerMetaItem]
+    total: MetasTotal
+
+
+class MetasReportResponse(BaseModel):
+    mensual: List[TallerMetaItem]
+    total_mensual: MetasTotal
+    semanas: List[MetasSemana]
+

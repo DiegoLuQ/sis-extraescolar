@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { sesionesApi, talleresApi, inscripcionesApi, asistenciaApi, alumnosApi } from "@/lib/api";
-import type { Sesion, Taller, Inscripcion, Alumno } from "@/types";
+import type { Sesion, Taller, Inscripcion, Alumno, NotaComportamiento, TipoComportamiento } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,11 +30,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { confirmDialog, alertDialog } from "@/components/ui/confirm-dialog";
 import {
   Loader2, ArrowLeft, CheckCircle, XCircle, AlertTriangle,
-  Save, User, ClipboardCheck, Lock, Unlock, Search, UserPlus
+  Save, User, ClipboardCheck, Lock, Unlock, Search, UserPlus,
+  ThumbsUp, ThumbsDown, Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -70,7 +72,19 @@ export default function AsistenciaPage() {
   const [inscripciones, setInscripciones] = useState<Inscripcion[]>([]);
   const [alumnos, setAlumnos] = useState<Map<string, Alumno>>(new Map());
   const [asistencias, setAsistencias] = useState<Map<string, string>>(new Map());
+  const [observaciones, setObservaciones] = useState<Map<string, string>>(new Map());
+  const [notas, setNotas] = useState<Map<string, NotaComportamiento[]>>(new Map());
   const [loading, setLoading] = useState(true);
+
+  // Modal de justificación (comentario al marcar Justificado)
+  const [justifModal, setJustifModal] = useState<{ alumnoId: string; nombre: string } | null>(null);
+  const [justifText, setJustifText] = useState("");
+
+  // Modal de nota de comportamiento (buen/mal comportamiento)
+  const [notaModal, setNotaModal] = useState<{ alumnoId: string; nombre: string; tipo: TipoComportamiento } | null>(null);
+  const [notaText, setNotaText] = useState("");
+  const [savingNota, setSavingNota] = useState(false);
+  const [deletingNotaId, setDeletingNotaId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [absentFromSchool, setAbsentFromSchool] = useState<any[]>([]);
   
@@ -157,14 +171,17 @@ export default function AsistenciaPage() {
 
       const alumnosMap = new Map<string, Alumno>();
       const asistenciasMap = new Map<string, string>();
-      
-      const [prevAsistencias, alumnosTaller] = await Promise.all([
+      const observacionesMap = new Map<string, string>();
+
+      const [prevAsistencias, alumnosTaller, notasData] = await Promise.all([
         asistenciaApi.getBySesion(sesionId),
-        alumnosApi.getAll(0, 500, sesionData.taller_id)
+        alumnosApi.getAll(0, 500, sesionData.taller_id),
+        asistenciaApi.getNotasComportamiento(sesionId),
       ]);
 
       prevAsistencias.forEach(a => {
         asistenciasMap.set(a.alumno_id, a.estado_asistencia);
+        if (a.observaciones) observacionesMap.set(a.alumno_id, a.observaciones);
       });
 
       alumnosTaller.forEach(alu => {
@@ -176,9 +193,18 @@ export default function AsistenciaPage() {
           asistenciasMap.set(ins.alumno_id, "");
         }
       });
-      
+
+      const notasMap = new Map<string, NotaComportamiento[]>();
+      notasData.forEach(n => {
+        const arr = notasMap.get(n.alumno_id) || [];
+        arr.push(n);
+        notasMap.set(n.alumno_id, arr);
+      });
+
       setAlumnos(alumnosMap);
       setAsistencias(asistenciasMap);
+      setObservaciones(observacionesMap);
+      setNotas(notasMap);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Error al cargar los datos de la sesión");
@@ -209,6 +235,7 @@ export default function AsistenciaPage() {
         .map(([alumnoId, estado]) => ({
           alumno_id: alumnoId,
           estado_asistencia: estado as "presente" | "ausente" | "justificado" | "atraso",
+          observaciones: estado === "justificado" ? (observaciones.get(alumnoId) || undefined) : undefined,
         }));
 
       await asistenciaApi.bulk({
@@ -294,6 +321,85 @@ export default function AsistenciaPage() {
       }
     }
     setAsistencias(prev => new Map(prev).set(alumnoId, estado));
+  };
+
+  // --- Justificación con comentario ---
+  const openJustifModal = (alumnoId: string) => {
+    if (isLockedForCurrentUser) return;
+    const alu = alumnos.get(alumnoId);
+    setJustifText(observaciones.get(alumnoId) || "");
+    setJustifModal({ alumnoId, nombre: alu?.nombre_completo || "" });
+  };
+
+  const confirmJustif = () => {
+    if (!justifModal) return;
+    const { alumnoId } = justifModal;
+    const texto = justifText.trim();
+    setObservaciones(prev => {
+      const m = new Map(prev);
+      if (texto) m.set(alumnoId, texto); else m.delete(alumnoId);
+      return m;
+    });
+    setAsistencias(prev => new Map(prev).set(alumnoId, "justificado"));
+    setJustifModal(null);
+    setJustifText("");
+  };
+
+  // --- Notas de comportamiento (buen/mal comportamiento) ---
+  const openNotaModal = (alumnoId: string, tipo: TipoComportamiento) => {
+    if (isLockedForCurrentUser) return;
+    const alu = alumnos.get(alumnoId);
+    setNotaText("");
+    setNotaModal({ alumnoId, nombre: alu?.nombre_completo || "", tipo });
+  };
+
+  const handleSaveNota = async () => {
+    if (!notaModal) return;
+    // El comentario es obligatorio solo para mal comportamiento; opcional para buen comportamiento.
+    if (notaModal.tipo === "malo" && !notaText.trim()) {
+      toast.warning("Escribe una nota antes de guardar.");
+      return;
+    }
+    setSavingNota(true);
+    try {
+      const nueva = await asistenciaApi.createNotaComportamiento({
+        sesion_id: sesionId,
+        alumno_id: notaModal.alumnoId,
+        tipo: notaModal.tipo,
+        nota: notaText.trim(),
+      });
+      setNotas(prev => {
+        const m = new Map(prev);
+        const arr = m.get(notaModal.alumnoId) || [];
+        m.set(notaModal.alumnoId, [nueva, ...arr]);
+        return m;
+      });
+      toast.success("Nota de comportamiento guardada");
+      setNotaModal(null);
+      setNotaText("");
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al guardar la nota");
+    } finally {
+      setSavingNota(false);
+    }
+  };
+
+  const handleDeleteNota = async (notaId: string, alumnoId: string) => {
+    setDeletingNotaId(notaId);
+    try {
+      await asistenciaApi.deleteNotaComportamiento(notaId);
+      setNotas(prev => {
+        const m = new Map(prev);
+        const arr = (m.get(alumnoId) || []).filter(n => n.id !== notaId);
+        if (arr.length) m.set(alumnoId, arr); else m.delete(alumnoId);
+        return m;
+      });
+      toast.success("Nota eliminada");
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al eliminar la nota");
+    } finally {
+      setDeletingNotaId(null);
+    }
   };
 
   if (loading) {
@@ -434,7 +540,11 @@ export default function AsistenciaPage() {
                     const alu = alumnos.get(ins.alumno_id);
                     const estado = asistencias.get(ins.alumno_id) || "";
                     const isAbsentInSchool = absentFromSchool.some(a => a.alumno_id === ins.alumno_id);
-                    
+                    const obsAlumno = observaciones.get(ins.alumno_id) || "";
+                    const alumnoNotas = notas.get(ins.alumno_id) || [];
+                    const notasBuenas = alumnoNotas.filter(n => n.tipo === "bueno").length;
+                    const notasMalas = alumnoNotas.filter(n => n.tipo === "malo").length;
+
                     return (
                       <TableRow 
                         key={ins.id} 
@@ -461,59 +571,145 @@ export default function AsistenciaPage() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell text-gray-500 text-sm">{alu?.rut}</TableCell>
-                        <TableCell className="pr-6 text-right sm:text-left">
-                          <div className={cn(
-                            "flex bg-gray-100/80 p-1 rounded-xl w-fit border border-gray-200",
-                            isLockedForCurrentUser && "opacity-60 cursor-not-allowed bg-gray-200/50"
-                          )}>
-                            <button
-                              type="button"
-                              disabled={isLockedForCurrentUser}
-                              onClick={() => updateAsistencia(ins.alumno_id, "presente")}
-                              className={cn(
-                                "flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200",
-                                estado === "presente" 
-                                  ? "bg-white text-green-600 shadow-sm ring-1 ring-black/5" 
-                                  : "text-gray-400 hover:text-gray-700 hover:bg-white/50",
-                                isLockedForCurrentUser && "cursor-not-allowed"
-                              )}
-                              title="Asiste"
-                            >
-                              <CheckCircle className={cn("h-4 w-4 sm:h-3.5 sm:w-3.5", estado === "presente" ? "text-green-500" : "text-gray-400")} />
-                              <span className="hidden sm:inline">Asiste</span>
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isLockedForCurrentUser}
-                              onClick={() => updateAsistencia(ins.alumno_id, "ausente")}
-                              className={cn(
-                                "flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200",
-                                estado === "ausente" 
-                                  ? "bg-white text-red-600 shadow-sm ring-1 ring-black/5" 
-                                  : "text-gray-400 hover:text-gray-700 hover:bg-white/50",
-                                isLockedForCurrentUser && "cursor-not-allowed"
-                              )}
-                              title="Ausente"
-                            >
-                              <XCircle className={cn("h-4 w-4 sm:h-3.5 sm:w-3.5", estado === "ausente" ? "text-red-500" : "text-gray-400")} />
-                              <span className="hidden sm:inline">Ausente</span>
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isLockedForCurrentUser}
-                              onClick={() => updateAsistencia(ins.alumno_id, "justificado")}
-                              className={cn(
-                                "flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200",
-                                estado === "justificado" 
-                                  ? "bg-white text-amber-600 shadow-sm ring-1 ring-black/5" 
-                                  : "text-gray-400 hover:text-gray-700 hover:bg-white/50",
-                                isLockedForCurrentUser && "cursor-not-allowed"
-                              )}
-                              title="Justificado"
-                            >
-                              <AlertTriangle className={cn("h-4 w-4 sm:h-3.5 sm:w-3.5", estado === "justificado" ? "text-amber-500" : "text-gray-400")} />
-                              <span className="hidden sm:inline">Justificado</span>
-                            </button>
+                        <TableCell className="pr-6">
+                          <div className="flex flex-col items-end sm:items-start gap-2">
+                            <div className="flex flex-wrap items-center justify-end sm:justify-start gap-2">
+                              <div className={cn(
+                                "flex bg-gray-100/80 p-1 rounded-xl w-fit border border-gray-200",
+                                isLockedForCurrentUser && "opacity-60 cursor-not-allowed bg-gray-200/50"
+                              )}>
+                                <button
+                                  type="button"
+                                  disabled={isLockedForCurrentUser}
+                                  onClick={() => updateAsistencia(ins.alumno_id, "presente")}
+                                  className={cn(
+                                    "flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200",
+                                    estado === "presente"
+                                      ? "bg-white text-green-600 shadow-sm ring-1 ring-black/5"
+                                      : "text-gray-400 hover:text-gray-700 hover:bg-white/50",
+                                    isLockedForCurrentUser && "cursor-not-allowed"
+                                  )}
+                                  title="Asiste"
+                                >
+                                  <CheckCircle className={cn("h-4 w-4 sm:h-3.5 sm:w-3.5", estado === "presente" ? "text-green-500" : "text-gray-400")} />
+                                  <span className="hidden sm:inline">Asiste</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isLockedForCurrentUser}
+                                  onClick={() => updateAsistencia(ins.alumno_id, "ausente")}
+                                  className={cn(
+                                    "flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200",
+                                    estado === "ausente"
+                                      ? "bg-white text-red-600 shadow-sm ring-1 ring-black/5"
+                                      : "text-gray-400 hover:text-gray-700 hover:bg-white/50",
+                                    isLockedForCurrentUser && "cursor-not-allowed"
+                                  )}
+                                  title="Ausente"
+                                >
+                                  <XCircle className={cn("h-4 w-4 sm:h-3.5 sm:w-3.5", estado === "ausente" ? "text-red-500" : "text-gray-400")} />
+                                  <span className="hidden sm:inline">Ausente</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isLockedForCurrentUser}
+                                  onClick={() => openJustifModal(ins.alumno_id)}
+                                  className={cn(
+                                    "flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200",
+                                    estado === "justificado"
+                                      ? "bg-white text-amber-600 shadow-sm ring-1 ring-black/5"
+                                      : "text-gray-400 hover:text-gray-700 hover:bg-white/50",
+                                    isLockedForCurrentUser && "cursor-not-allowed"
+                                  )}
+                                  title="Justificado (agregar comentario)"
+                                >
+                                  <AlertTriangle className={cn("h-4 w-4 sm:h-3.5 sm:w-3.5", estado === "justificado" ? "text-amber-500" : "text-gray-400")} />
+                                  <span className="hidden sm:inline">Justificado</span>
+                                </button>
+                              </div>
+
+                              {/* Botones de comportamiento */}
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={isLockedForCurrentUser}
+                                  onClick={() => openNotaModal(ins.alumno_id, "bueno")}
+                                  className={cn(
+                                    "relative flex items-center justify-center h-9 w-9 rounded-lg border transition-all duration-200",
+                                    "border-green-200 text-green-600 hover:bg-green-50",
+                                    isLockedForCurrentUser && "opacity-50 cursor-not-allowed"
+                                  )}
+                                  title="Buen comportamiento"
+                                >
+                                  <ThumbsUp className="h-4 w-4" />
+                                  {notasBuenas > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 bg-green-500 text-white text-[9px] font-bold h-4 min-w-4 px-1 rounded-full flex items-center justify-center">
+                                      {notasBuenas}
+                                    </span>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isLockedForCurrentUser}
+                                  onClick={() => openNotaModal(ins.alumno_id, "malo")}
+                                  className={cn(
+                                    "relative flex items-center justify-center h-9 w-9 rounded-lg border transition-all duration-200",
+                                    "border-red-200 text-red-600 hover:bg-red-50",
+                                    isLockedForCurrentUser && "opacity-50 cursor-not-allowed"
+                                  )}
+                                  title="Mal comportamiento"
+                                >
+                                  <ThumbsDown className="h-4 w-4" />
+                                  {notasMalas > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold h-4 min-w-4 px-1 rounded-full flex items-center justify-center">
+                                      {notasMalas}
+                                    </span>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Comentario de justificación */}
+                            {estado === "justificado" && obsAlumno && (
+                              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-1 max-w-xs text-left break-words">
+                                <span className="font-semibold">Justificación:</span> {obsAlumno}
+                              </p>
+                            )}
+
+                            {/* Listado de notas de comportamiento */}
+                            {alumnoNotas.length > 0 && (
+                              <div className="flex flex-col gap-1 w-full max-w-xs items-end sm:items-start">
+                                {alumnoNotas.map((n) => (
+                                  <div
+                                    key={n.id}
+                                    className={cn(
+                                      "group flex items-start gap-1.5 text-[11px] rounded-md px-2 py-1 border w-full",
+                                      n.tipo === "bueno"
+                                        ? "bg-green-50 border-green-100 text-green-800"
+                                        : "bg-red-50 border-red-100 text-red-800"
+                                    )}
+                                  >
+                                    {n.tipo === "bueno"
+                                      ? <ThumbsUp className="h-3 w-3 mt-0.5 shrink-0 text-green-500" />
+                                      : <ThumbsDown className="h-3 w-3 mt-0.5 shrink-0 text-red-500" />}
+                                    <span className="flex-1 text-left break-words">{n.nota || (n.tipo === "bueno" ? "Me gusta" : "")}</span>
+                                    {!isLockedForCurrentUser && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteNota(n.id, ins.alumno_id)}
+                                        disabled={deletingNotaId === n.id}
+                                        className="shrink-0 text-gray-400 hover:text-red-600 transition-colors"
+                                        title="Eliminar nota"
+                                      >
+                                        {deletingNotaId === n.id
+                                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                                          : <Trash2 className="h-3 w-3" />}
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -698,6 +894,107 @@ export default function AsistenciaPage() {
               ));
             })()}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Justificación */}
+      <Dialog
+        open={justifModal !== null}
+        onOpenChange={(open) => { if (!open) { setJustifModal(null); setJustifText(""); } }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              Justificar Inasistencia
+            </DialogTitle>
+            <DialogDescription>
+              Agrega un comentario para <span className="font-semibold text-gray-700">{justifModal?.nombre}</span>.
+              El alumno quedará marcado como <span className="font-semibold">Justificado</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Textarea
+              autoFocus
+              placeholder="Ej: Presentó certificado médico, ausencia autorizada por apoderado..."
+              value={justifText}
+              onChange={(e) => setJustifText(e.target.value)}
+              maxLength={500}
+              rows={4}
+            />
+            <p className="text-[11px] text-gray-400 mt-1 text-right">{justifText.length}/500</p>
+          </div>
+          <DialogFooter className="sm:justify-end gap-2">
+            <Button variant="outline" onClick={() => { setJustifModal(null); setJustifText(""); }}>
+              Cancelar
+            </Button>
+            <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={confirmJustif}>
+              Marcar Justificado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Nota de Comportamiento */}
+      <Dialog
+        open={notaModal !== null}
+        onOpenChange={(open) => { if (!open) { setNotaModal(null); setNotaText(""); } }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className={cn(
+              "flex items-center gap-2",
+              notaModal?.tipo === "bueno" ? "text-green-600" : "text-red-600"
+            )}>
+              {notaModal?.tipo === "bueno"
+                ? <ThumbsUp className="h-5 w-5" />
+                : <ThumbsDown className="h-5 w-5" />}
+              {notaModal?.tipo === "bueno" ? "Nota de Buen Comportamiento" : "Nota de Mal Comportamiento"}
+            </DialogTitle>
+            <DialogDescription>
+              {notaModal?.tipo === "bueno" ? (
+                <>
+                  Se registrará un <span className="font-semibold">me gusta</span> para{" "}
+                  <span className="font-semibold text-gray-700">{notaModal?.nombre}</span>.
+                  Si lo deseas, puedes agregar un comentario (opcional).
+                </>
+              ) : (
+                <>
+                  Registra una observación de comportamiento para{" "}
+                  <span className="font-semibold text-gray-700">{notaModal?.nombre}</span> en esta sesión.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Textarea
+              autoFocus
+              placeholder={notaModal?.tipo === "bueno"
+                ? "Ej: Participó activamente y ayudó a sus compañeros..."
+                : "Ej: Interrumpió la clase reiteradamente, no siguió instrucciones..."}
+              value={notaText}
+              onChange={(e) => setNotaText(e.target.value)}
+              maxLength={500}
+              rows={4}
+            />
+            <p className="text-[11px] text-gray-400 mt-1 text-right">{notaText.length}/500</p>
+          </div>
+          <DialogFooter className="sm:justify-end gap-2">
+            <Button variant="outline" onClick={() => { setNotaModal(null); setNotaText(""); }}>
+              Cancelar
+            </Button>
+            <Button
+              className={cn(
+                "text-white",
+                notaModal?.tipo === "bueno" ? "bg-green-500 hover:bg-green-600" : "bg-red-500 hover:bg-red-600"
+              )}
+              disabled={savingNota}
+              onClick={handleSaveNota}
+            >
+              {savingNota && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Guardar Nota
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

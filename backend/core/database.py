@@ -22,7 +22,7 @@ Base = declarative_base()
 
 # Tablas que requieren filtrado automático por colegio_id (multi-tenant).
 # colegios queda fuera adrede: es la tabla de tenants y se consulta sin filtro.
-TENANT_TABLES = {"usuarios", "alumnos", "talleres", "inscripciones", "sesiones", "asistencias", "alertas_inconsistencia", "correos_reportes"}
+TENANT_TABLES = {"usuarios", "alumnos", "talleres", "inscripciones", "sesiones", "asistencias", "alertas_inconsistencia", "correos_reportes", "notas_comportamiento"}
 
 
 def _iter_tenant_models():

@@ -97,6 +97,7 @@ export default function TalleresPage() {
     cupos_maximos: 20,
     periodo: new Date().getFullYear(),
     cursos_asignados: "",
+    meta_asistencia: null,
     colegio_id: undefined,
     horarios: [{ dia: "Lunes", hora_inicio: "", hora_fin: "" }],
   });
@@ -169,6 +170,7 @@ export default function TalleresPage() {
       cupos_maximos: taller.cupos_maximos,
       periodo: taller.periodo,
       cursos_asignados: taller.cursos_asignados || "",
+      meta_asistencia: taller.meta_asistencia ?? null,
       colegio_id: taller.colegio_id,
       horarios: horarios.map((h) => ({
         dia: h.dia,
@@ -375,6 +377,7 @@ export default function TalleresPage() {
       cupos_maximos: 20,
       periodo: new Date().getFullYear(),
       cursos_asignados: "",
+      meta_asistencia: null,
       colegio_id: undefined,
       horarios: [{ dia: "Lunes", hora_inicio: "", hora_fin: "" }],
     });
@@ -623,6 +626,23 @@ export default function TalleresPage() {
                             setFormData({ ...formData, cursos_asignados: e.target.value })
                           }
                           placeholder="Ej: 1ºA, 1ºB, 2ºA o Básica"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="meta_asistencia">Meta de Asistencia (%) (Opcional)</Label>
+                        <Input
+                          id="meta_asistencia"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={formData.meta_asistencia ?? ""}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              meta_asistencia: e.target.value === "" ? null : parseInt(e.target.value),
+                            })
+                          }
+                          placeholder="Vacío = hereda la meta del colegio"
                         />
                       </div>
                       {editingTaller && (

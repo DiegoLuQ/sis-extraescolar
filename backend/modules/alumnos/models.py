@@ -11,4 +11,5 @@ class Alumno(Base):
     rut = Column(String(20), nullable=False)
     nombre_completo = Column(String(255), nullable=False)
     curso = Column(String(50), nullable=False)
+    telefono = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)

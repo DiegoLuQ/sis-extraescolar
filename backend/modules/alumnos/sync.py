@@ -94,7 +94,7 @@ def fetch_external_students(db_url: str) -> list:
         try:
             # Intentamos con c.nombre como identificador del curso
             query = text("""
-                SELECT a.rut, a.nombre, c.nombre AS curso_nombre
+                SELECT a.rut, a.nombre, c.nombre AS curso_nombre, a.telefono_contacto
                 FROM alumnos a
                 JOIN cursos c ON a.curso_id = c.id
             """)
@@ -102,7 +102,7 @@ def fetch_external_students(db_url: str) -> list:
         except Exception as e:
             logger.warning(f"Fallo consulta con c.nombre en {db_url}, intentando fallback con c.curso: {e}")
             query = text("""
-                SELECT a.rut, a.nombre, c.curso AS curso_nombre
+                SELECT a.rut, a.nombre, c.curso AS curso_nombre, a.telefono_contacto
                 FROM alumnos a
                 JOIN cursos c ON a.curso_id = c.id
             """)
@@ -118,6 +118,7 @@ def fetch_external_students(db_url: str) -> list:
                 "rut": str(rut).strip(),
                 "nombre_completo": str(nombre).strip() if nombre else "",
                 "curso": normalize_curso(str(curso_raw)) if curso_raw else "",
+                "telefono": str(row[3]).strip() if len(row) > 3 and row[3] is not None else None,
             })
     return students
 

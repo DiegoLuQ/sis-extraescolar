@@ -45,6 +45,13 @@ backend/.coverage
 backend/htmlcov/
 backend/pip-log.txt
 backend/pip-delete-this-directory.txt
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+# Bases de datos locales / volcados
+*.sqlite3
+*.db
+*.sql
 
 # --- DOCKER ---
 mysql_data/

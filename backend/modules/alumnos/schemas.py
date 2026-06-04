@@ -7,6 +7,7 @@ class AlumnoBase(BaseModel):
     rut: str
     nombre_completo: str
     curso: str
+    telefono: Optional[str] = None
 
 
 class AlumnoCreate(AlumnoBase):
@@ -17,6 +18,7 @@ class AlumnoUpdate(BaseModel):
     rut: Optional[str] = None
     nombre_completo: Optional[str] = None
     curso: Optional[str] = None
+    telefono: Optional[str] = None
     is_active: Optional[bool] = None
 
 

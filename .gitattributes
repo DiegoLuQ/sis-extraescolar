@@ -1,0 +1,2 @@
+# Los scripts shell deben conservar saltos de línea LF para funcionar en Linux/Docker
+*.sh text eol=lf

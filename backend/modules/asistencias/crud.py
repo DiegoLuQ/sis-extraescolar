@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from uuid import UUID
-from modules.asistencias.models import Asistencia, EstadoAsistenciaEnum, AlertaInconsistencia
-from modules.asistencias.schemas import AsistenciaCreate, AsistenciaUpdate
+from modules.asistencias.models import Asistencia, EstadoAsistenciaEnum, AlertaInconsistencia, NotaComportamiento, TipoComportamientoEnum
+from modules.asistencias.schemas import AsistenciaCreate, AsistenciaUpdate, NotaComportamientoCreate
 from datetime import datetime
 
 
@@ -99,5 +99,46 @@ def get_alertas_inconsistencia(db: Session, colegio_id: str):
 
     if colegio_id and colegio_id != "None":
         query = query.filter(AlertaInconsistencia.colegio_id == str(colegio_id))
-    
+
     return query.order_by(AlertaInconsistencia.creado_at.desc()).all()
+
+
+def create_nota_comportamiento(db: Session, data: NotaComportamientoCreate, colegio_id: str = None, usuario_id: str = None):
+    from modules.sesiones.models import Sesion
+    sesion = db.query(Sesion).filter(Sesion.id == str(data.sesion_id)).first()
+    if not sesion:
+        raise ValueError("Sesión no encontrada")
+
+    active_colegio_id = str(colegio_id) if (colegio_id and colegio_id != "None") else sesion.colegio_id
+
+    nueva_nota = NotaComportamiento(
+        colegio_id=active_colegio_id,
+        sesion_id=str(data.sesion_id),
+        alumno_id=str(data.alumno_id),
+        tipo=TipoComportamientoEnum[data.tipo.lower()],
+        nota=(data.nota or "").strip(),
+        creado_por=str(usuario_id) if usuario_id else None,
+        creado_at=datetime.now().isoformat(),
+    )
+    db.add(nueva_nota)
+    db.commit()
+    db.refresh(nueva_nota)
+    return nueva_nota
+
+
+def get_notas_comportamiento(db: Session, colegio_id: str, sesion_id: UUID):
+    query = db.query(NotaComportamiento).filter(NotaComportamiento.sesion_id == str(sesion_id))
+    if colegio_id and colegio_id != "None":
+        query = query.filter(NotaComportamiento.colegio_id == str(colegio_id))
+    return query.order_by(NotaComportamiento.creado_at.desc()).all()
+
+
+def delete_nota_comportamiento(db: Session, nota_id: UUID, colegio_id: str = None):
+    query = db.query(NotaComportamiento).filter(NotaComportamiento.id == str(nota_id))
+    if colegio_id and colegio_id != "None":
+        query = query.filter(NotaComportamiento.colegio_id == str(colegio_id))
+    nota = query.first()
+    if nota:
+        db.delete(nota)
+        db.commit()
+    return nota

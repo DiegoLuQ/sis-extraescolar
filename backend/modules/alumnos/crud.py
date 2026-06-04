@@ -121,16 +121,18 @@ def bulk_upsert_alumnos(db: Session, alumnos_data: list, colegio_id: str):
             rut = format_rut(item.get("rut"))
             nombre = item.get("nombre_completo")
             curso = item.get("curso")
+            telefono = item.get("telefono")
             if not rut or not nombre or not curso:
                 stats["errors"] += 1
                 continue
-            
+
             if rut in existing_map:
                 existing = existing_map[rut]
-                # Si existe, actualizamos nombre y curso para consistencia, y reactivamos si estaba borrado
-                if existing.curso != curso or existing.nombre_completo != nombre or not existing.is_active:
+                # Si existe, actualizamos nombre, curso y teléfono para consistencia, y reactivamos si estaba borrado
+                if existing.curso != curso or existing.nombre_completo != nombre or existing.telefono != telefono or not existing.is_active:
                     existing.curso = curso
                     existing.nombre_completo = nombre
+                    existing.telefono = telefono
                     existing.is_active = True
                     stats["updated"] += 1
             else:
@@ -138,6 +140,7 @@ def bulk_upsert_alumnos(db: Session, alumnos_data: list, colegio_id: str):
                     rut=rut,
                     nombre_completo=nombre,
                     curso=curso,
+                    telefono=telefono,
                     colegio_id=colegio_id,
                     is_active=True
                 )

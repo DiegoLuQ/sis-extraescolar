@@ -18,6 +18,8 @@ class Taller(Base):
     hora_fin = Column(String(5), nullable=True)     # HH:MM fallback/primer bloque
     is_active = Column(Boolean, default=True)
     cursos_asignados = Column(String(500), nullable=True)
+    # Meta de asistencia individual (%). NULL => hereda la meta del colegio.
+    meta_asistencia = Column(Integer, nullable=True)
 
     horarios = relationship("TallerHorario", backref="taller", cascade="all, delete-orphan", lazy="selectin")
 

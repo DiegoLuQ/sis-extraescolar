@@ -42,6 +42,19 @@ def get_annual_report(
     
     return crud.get_annual_attendance_report(db, tenant.colegio_id, anio)
 
+@router.get("/metas", response_model=schemas.MetasReportResponse)
+def get_metas_report(
+    mes: int = Query(..., ge=1, le=12),
+    anio: int = Query(...),
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    if tenant.rol == "monitor":
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver reportes globales")
+
+    return crud.get_metas_report(db, tenant.colegio_id, mes, anio)
+
+
 @router.get("/resumen-semana", response_model=schemas.WeeklySummaryResponse)
 def get_weekly_summary(
     semanas_atras: int = Query(0, ge=0),

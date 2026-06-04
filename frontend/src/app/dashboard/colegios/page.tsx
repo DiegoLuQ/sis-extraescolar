@@ -2,10 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { colegiosApi, usuariosApi } from "@/lib/api";
+import { colegiosApi } from "@/lib/api";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
-import { formatRut } from "@/lib/utils";
-import type { Colegio, ColegioCreate, Usuario } from "@/types";
+import { formatRut, cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { Colegio, ColegioCreate } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +41,7 @@ import { useAuthStore } from "@/store/authStore";
 export default function ColegiosPage() {
   const { user } = useAuthStore();
   const [colegios, setColegios] = useState<Colegio[]>([]);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuariosCount, setUsuariosCount] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -44,6 +51,9 @@ export default function ColegiosPage() {
   const [formData, setFormData] = useState<ColegioCreate>({
     nombre_colegio: "",
     rut_sostenedor: "",
+    meta_asistencia: 85,
+    tema_color: "calipso",
+    logo_url: "",
   });
 
   useEffect(() => {
@@ -56,13 +66,14 @@ export default function ColegiosPage() {
 
   const fetchData = async () => {
     try {
-      // Extraemos colegios y todos los usuarios para calcular la cantidad de usuarios por colegio
-      const [colegiosData, usuariosData] = await Promise.all([
+      // El conteo de usuarios por colegio se obtiene cross-tenant desde el backend
+      // (usuariosApi.getAll está filtrado por el colegio activo y no sirve para esto).
+      const [colegiosData, countData] = await Promise.all([
         colegiosApi.getAll(),
-        usuariosApi.getAll(0, 1000),
+        colegiosApi.getUsuariosCount(),
       ]);
       setColegios(colegiosData);
-      setUsuarios(usuariosData);
+      setUsuariosCount(countData);
     } catch (error) {
       console.error("Error fetching colegios data:", error);
       toast.error("Error al cargar los establecimientos");
@@ -96,6 +107,9 @@ export default function ColegiosPage() {
     setFormData({
       nombre_colegio: colegio.nombre_colegio,
       rut_sostenedor: formatRut(colegio.rut_sostenedor),
+      meta_asistencia: colegio.meta_asistencia ?? 85,
+      tema_color: colegio.tema_color ?? "calipso",
+      logo_url: colegio.logo_url ?? "",
     });
     setIsDialogOpen(true);
   };
@@ -118,12 +132,18 @@ export default function ColegiosPage() {
   };
 
   const resetForm = () => {
-    setFormData({ nombre_colegio: "", rut_sostenedor: "" });
+    setFormData({
+      nombre_colegio: "",
+      rut_sostenedor: "",
+      meta_asistencia: 85,
+      tema_color: "calipso",
+      logo_url: "",
+    });
     setEditingColegio(null);
   };
 
   const getCantidadUsuarios = (colegioId: string) => {
-    return usuarios.filter((u) => u.colegio_id === colegioId).length;
+    return usuariosCount[colegioId] ?? 0;
   };
 
   const filteredColegios = colegios.filter(
@@ -206,6 +226,57 @@ export default function ColegiosPage() {
                     required
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="meta_asistencia">Meta de Asistencia (%)</Label>
+                  <Input
+                    id="meta_asistencia"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={formData.meta_asistencia ?? ""}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        meta_asistencia: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                    placeholder="85"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Meta por defecto para todos los talleres del colegio. Cada taller puede tener su propia meta.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tema_color">Tema de Color</Label>
+                  <Select
+                    value={formData.tema_color || "calipso"}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, tema_color: value })
+                    }
+                  >
+                    <SelectTrigger id="tema_color">
+                      <SelectValue placeholder="Selecciona un tema" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="calipso">Calipso (Por defecto)</SelectItem>
+                      <SelectItem value="verde-oscuro">Verde Oscuro</SelectItem>
+                      <SelectItem value="burdeo">Burdeo</SelectItem>
+                      <SelectItem value="azul">Azul</SelectItem>
+                      <SelectItem value="anaranjado">Anaranjado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="logo_url">URL del Logo (Opcional)</Label>
+                  <Input
+                    id="logo_url"
+                    value={formData.logo_url || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, logo_url: e.target.value })
+                    }
+                    placeholder="https://ejemplo.com/logo.png"
+                  />
+                </div>
               </div>
               <DialogFooter>
                 <Button
@@ -260,6 +331,7 @@ export default function ColegiosPage() {
                 <TableHead>Nombre del Colegio</TableHead>
                 <TableHead>RUT Sostenedor</TableHead>
                 <TableHead className="text-center">Usuarios Asociados</TableHead>
+                <TableHead>Tema</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -276,13 +348,30 @@ export default function ColegiosPage() {
                   <TableRow key={colegio.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        <School className="h-4 w-4 text-calipso-500" />
+                        {colegio.logo_url ? (
+                          <img src={colegio.logo_url} alt="Logo" className="h-6 w-6 object-contain rounded bg-gray-50 border p-0.5" />
+                        ) : (
+                          <School className="h-4 w-4 text-calipso-500" />
+                        )}
                         {colegio.nombre_colegio}
                       </div>
                     </TableCell>
                     <TableCell className="text-gray-500">{formatRut(colegio.rut_sostenedor)}</TableCell>
                     <TableCell className="text-center font-semibold text-gray-700">
                       {getCantidadUsuarios(colegio.id)}
+                    </TableCell>
+                    <TableCell className="capitalize">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "inline-block w-3 h-3 rounded-full border",
+                          colegio.tema_color === "verde-oscuro" && "bg-green-700",
+                          colegio.tema_color === "burdeo" && "bg-red-800",
+                          colegio.tema_color === "azul" && "bg-blue-700",
+                          colegio.tema_color === "anaranjado" && "bg-orange-500",
+                          (colegio.tema_color === "calipso" || !colegio.tema_color) && "bg-cyan-500"
+                        )} />
+                        {colegio.tema_color || "Calipso"}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant={colegio.is_active ? "success" : "secondary"}>

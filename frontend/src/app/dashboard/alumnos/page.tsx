@@ -74,6 +74,7 @@ export default function AlumnosPage() {
     rut: "",
     nombre_completo: "",
     curso: "",
+    telefono: "",
   });
 
   useEffect(() => {
@@ -104,6 +105,7 @@ export default function AlumnosPage() {
           rut: formData.rut,
           nombre_completo: formData.nombre_completo,
           curso: formData.curso,
+          telefono: formData.telefono,
         });
       } else {
         await alumnosApi.create(formData);
@@ -125,6 +127,7 @@ export default function AlumnosPage() {
       rut: alumno.rut,
       nombre_completo: alumno.nombre_completo,
       curso: alumno.curso,
+      telefono: alumno.telefono || "",
     });
     setIsDialogOpen(true);
   };
@@ -229,7 +232,7 @@ export default function AlumnosPage() {
   };
 
   const resetForm = () => {
-    setFormData({ rut: "", nombre_completo: "", curso: "" });
+    setFormData({ rut: "", nombre_completo: "", curso: "", telefono: "" });
     setEditingAlumno(null);
   };
 
@@ -378,6 +381,17 @@ export default function AlumnosPage() {
                           )}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="telefono">Teléfono</Label>
+                      <Input
+                        id="telefono"
+                        value={formData.telefono || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, telefono: e.target.value })
+                        }
+                        placeholder="9823959479"
+                      />
                     </div>
                   </div>
                   <DialogFooter>
@@ -589,6 +603,7 @@ export default function AlumnosPage() {
                 <TableHead>RUT</TableHead>
                 <TableHead>Nombre Completo</TableHead>
                 <TableHead>Curso</TableHead>
+                <TableHead>Teléfono</TableHead>
                 <TableHead>Estado</TableHead>
                 {user?.rol !== 'monitor' && <TableHead className="text-right">Acciones</TableHead>}
               </TableRow>
@@ -596,7 +611,7 @@ export default function AlumnosPage() {
             <TableBody>
               {paginatedAlumnos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-400">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-400">
                     No hay alumnos registrados
                   </TableCell>
                 </TableRow>
@@ -609,6 +624,9 @@ export default function AlumnosPage() {
                     <TableCell className="font-medium">{alumno.rut}</TableCell>
                     <TableCell>{alumno.nombre_completo}</TableCell>
                     <TableCell>{alumno.curso}</TableCell>
+                    <TableCell className="font-mono text-sm text-gray-600">
+                      {alumno.telefono || "—"}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={alumno.is_active ? "success" : "secondary"}>
                         {alumno.is_active ? "Activo" : "Inactivo"}

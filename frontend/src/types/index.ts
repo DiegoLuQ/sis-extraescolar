@@ -34,6 +34,7 @@ export interface Alumno {
   rut: string;
   nombre_completo: string;
   curso: string;
+  telefono?: string;
   colegio_id: UUID;
   is_active: boolean;
 }
@@ -42,12 +43,14 @@ export interface AlumnoCreate {
   rut: string;
   nombre_completo: string;
   curso: string;
+  telefono?: string;
 }
 
 export interface AlumnoUpdate {
   rut?: string;
   nombre_completo?: string;
   curso?: string;
+  telefono?: string;
   is_active?: boolean;
 }
 
@@ -73,6 +76,7 @@ export interface Taller {
   is_active: boolean;
   periodo: number;
   cursos_asignados?: string;
+  meta_asistencia?: number | null;
   horarios?: TallerHorario[];
 }
 
@@ -85,6 +89,7 @@ export interface TallerCreate {
   hora_fin?: string;
   periodo: number;
   cursos_asignados?: string;
+  meta_asistencia?: number | null;
   colegio_id?: UUID;
   horarios?: TallerHorario[];
 }
@@ -99,6 +104,7 @@ export interface TallerUpdate {
   periodo?: number;
   cursos_asignados?: string;
   is_active?: boolean;
+  meta_asistencia?: number | null;
   colegio_id?: UUID;
   horarios?: TallerHorario[];
 }
@@ -159,22 +165,50 @@ export interface AsistenciaCreate {
   }[];
 }
 
+export type TipoComportamiento = 'bueno' | 'malo';
+
+export interface NotaComportamiento {
+  id: UUID;
+  colegio_id: UUID;
+  sesion_id: UUID;
+  alumno_id: UUID;
+  tipo: TipoComportamiento;
+  nota: string;
+  creado_at?: string | null;
+}
+
+export interface NotaComportamientoCreate {
+  sesion_id: UUID;
+  alumno_id: UUID;
+  tipo: TipoComportamiento;
+  nota: string;
+}
+
 export interface Colegio {
   id: UUID;
   nombre_colegio: string;
   rut_sostenedor: string;
   is_active: boolean;
+  meta_asistencia?: number | null;
+  tema_color?: string;
+  logo_url?: string;
 }
 
 export interface ColegioCreate {
   nombre_colegio: string;
   rut_sostenedor: string;
+  meta_asistencia?: number | null;
+  tema_color?: string;
+  logo_url?: string;
 }
 
 export interface ColegioUpdate {
   nombre_colegio?: string;
   rut_sostenedor?: string;
   is_active?: boolean;
+  meta_asistencia?: number | null;
+  tema_color?: string;
+  logo_url?: string;
 }
 
 export interface Token {
@@ -219,7 +253,37 @@ export interface AlertaInasistencia {
   alumno_id: UUID;
   nombre_completo: string;
   curso: string;
+  telefono?: string;
   talleres: TallerAusentismoDetalle[];
+}
+
+export type EstadoAsistencia = 'presente' | 'ausente' | 'justificado' | 'atraso' | 'sin_registro';
+
+export interface SesionAsistenciaItem {
+  fecha: string;
+  tematica?: string | null;
+  estado: EstadoAsistencia;
+}
+
+export interface TallerAsistenciaResumen {
+  taller_id: UUID;
+  nombre_taller: string;
+  total_sesiones: number;
+  presentes: number;
+  ausentes: number;
+  justificados: number;
+  atrasos: number;
+  sin_registro: number;
+  sesiones: SesionAsistenciaItem[];
+}
+
+export interface AlumnoAsistenciaDetalle {
+  alumno_id: UUID;
+  nombre_completo: string;
+  rut: string;
+  curso: string;
+  telefono?: string | null;
+  talleres: TallerAsistenciaResumen[];
 }
 
 export interface User {
@@ -228,4 +292,35 @@ export interface User {
   nombre_2: string;
   nombre_colegio: string;
   rol: 'admin' | 'monitor' | 'coordinador';
+}
+
+export interface TallerMetaItem {
+  taller_id: UUID;
+  nombre_taller: string;
+  asistencias: number;
+  registros: number;
+  porcentaje: number;
+  meta: number;
+  cumple: boolean;
+}
+
+export interface MetasTotal {
+  asistencias: number;
+  registros: number;
+  porcentaje: number;
+  meta: number;
+  cumple: boolean;
+}
+
+export interface MetasSemana {
+  semana_inicio: string;
+  semana_fin: string;
+  items: TallerMetaItem[];
+  total: MetasTotal;
+}
+
+export interface MetasReport {
+  mensual: TallerMetaItem[];
+  total_mensual: MetasTotal;
+  semanas: MetasSemana[];
 }

@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { authApi } from "@/lib/api";
 
 export default function DashboardLayout({
   children,
@@ -23,6 +24,29 @@ export default function DashboardLayout({
       router.replace("/login");
     }
   }, [isHydrated, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const activeSchoolId = localStorage.getItem("colegio_id");
+      if (activeSchoolId) {
+        authApi.getMisColegios().then((colegios) => {
+          const activeCo = colegios.find((c: any) => c.id === activeSchoolId);
+          if (activeCo && activeCo.tema_color) {
+            const themeClass = `theme-${activeCo.tema_color.toLowerCase().replace(/\s+/g, '-')}`;
+            document.documentElement.className = themeClass;
+          } else {
+            document.documentElement.className = "theme-calipso";
+          }
+        }).catch(() => {
+          document.documentElement.className = "theme-calipso";
+        });
+      } else {
+        document.documentElement.className = "theme-calipso";
+      }
+    } else {
+      document.documentElement.className = "";
+    }
+  }, [isAuthenticated]);
 
   if (!isHydrated) {
     return (

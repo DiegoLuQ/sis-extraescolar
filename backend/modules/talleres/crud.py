@@ -258,11 +258,10 @@ def bulk_upsert_talleres(db: Session, talleres_data: list, colegio_id: str):
             is_update = False
             # Aislar errores individuales usando un savepoint anidado
             with db.begin_nested():
-                # Buscar profesor por ID o por nombre de usuario (login) en el colegio destino
+                # Buscar profesor por ID o por nombre de usuario (login) de forma global
                 profesor = db.query(Usuario).filter(
-                    (Usuario.id == prof_id_or_name) | (Usuario.nombre == prof_id_or_name),
-                    Usuario.colegio_id == item_colegio_id
-                ).first()
+                    (Usuario.id == prof_id_or_name) | (Usuario.nombre == prof_id_or_name)
+                ).execution_options(skip_tenant_filter=True).first()
                 
                 if not profesor:
                     raise ValueError("Profesor no encontrado")
@@ -369,6 +368,7 @@ def clonar_periodo(db: Session, source_periodo: int, target_periodo: int, taller
             colegio_id=colegio_id,
             periodo=target_periodo,
             cursos_asignados=source_taller.cursos_asignados,
+            meta_asistencia=source_taller.meta_asistencia,
             is_active=True
         )
         db.add(new_taller)

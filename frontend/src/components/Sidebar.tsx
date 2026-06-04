@@ -109,12 +109,21 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
   const filteredNavigation = navigation.filter(item => puedeVer(item.modulo));
 
+  const activeSchoolId = typeof window !== "undefined" ? localStorage.getItem("colegio_id") : null;
+  const activeColegio = colegios.find((c) => c.id === activeSchoolId);
+
   return (
     <div className="flex h-screen w-64 flex-col bg-calipso-900">
       <div className="flex h-16 items-center justify-between px-6 border-b border-calipso-800 shrink-0">
-        <div className="flex items-center gap-2">
-          <School className="h-8 w-8 text-white" />
-          <span className="text-lg font-bold text-white">Sis-Extraescolar</span>
+        <div className="flex items-center gap-2 min-w-0">
+          {activeColegio?.logo_url ? (
+            <img src={activeColegio.logo_url} alt="Logo" className="h-8 w-8 object-contain rounded-md bg-white p-0.5" />
+          ) : (
+            <School className="h-8 w-8 text-white" />
+          )}
+          <span className="text-lg font-bold text-white truncate">
+            {activeColegio ? activeColegio.nombre_colegio : "Sis-Extraescolar"}
+          </span>
         </div>
         {onClose && (
           <button onClick={onClose} className="lg:hidden text-calipso-300 hover:text-white">

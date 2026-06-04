@@ -40,3 +40,23 @@ class AlertaInconsistenciaResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class NotaComportamientoCreate(BaseModel):
+    sesion_id: UUID
+    alumno_id: UUID
+    tipo: str  # bueno | malo
+    nota: Optional[str] = ""  # opcional para 'bueno'
+
+
+class NotaComportamientoResponse(BaseModel):
+    id: UUID
+    colegio_id: UUID
+    sesion_id: UUID
+    alumno_id: UUID
+    tipo: str
+    nota: str
+    creado_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True

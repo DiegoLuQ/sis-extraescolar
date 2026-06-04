@@ -13,9 +13,18 @@ from modules.inscripciones.models import Inscripcion
 from modules.sesiones.models import Sesion
 from modules.asistencias.models import Asistencia
 from modules.roles.models import Rol, Permiso
+from modules.correos.models import CorreoReporte
 from core.database import Base
+from core.config import settings
 
 config = context.config
+
+# Usar la URL de la base de datos desde la configuración de la app (variable de
+# entorno DATABASE_URL) en lugar del valor hardcodeado en alembic.ini. Esto permite
+# que las migraciones funcionen correctamente dentro de Docker, donde el host de la
+# BD no es "localhost". Se escapa "%" para evitar errores de interpolación de ConfigParser.
+if settings.DATABASE_URL:
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

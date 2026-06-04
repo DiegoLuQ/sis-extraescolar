@@ -1,3 +1,4 @@
+import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from uuid import UUID
@@ -58,7 +59,8 @@ def create_inscripcion(db: Session, inscripcion: InscripcionCreate, escuela_id: 
         taller_id=str(inscripcion.taller_id),
         alumno_id=str(inscripcion.alumno_id),
         colegio_id=str(escuela_id),
-        estado=EstadoInscripcionEnum.inscrito
+        estado=EstadoInscripcionEnum.inscrito,
+        fecha_inscripcion=datetime.date.today()
     )
     db.add(db_inscripcion)
     db.commit()
@@ -69,7 +71,15 @@ def create_inscripcion(db: Session, inscripcion: InscripcionCreate, escuela_id: 
 def update_inscripcion(db: Session, inscripcion_id: UUID, inscripcion: InscripcionUpdate, escuela_id: UUID):
     db_inscripcion = get_inscripcion_by_id(db, inscripcion_id, escuela_id)
     if db_inscripcion and inscripcion.estado:
-        db_inscripcion.estado = EstadoInscripcionEnum[inscripcion.estado.lower()]
+        nuevo_estado = EstadoInscripcionEnum[inscripcion.estado.lower()]
+        db_inscripcion.estado = nuevo_estado
+        # Registrar/limpiar la fecha de retiro para mantener el histórico exacto.
+        if nuevo_estado == EstadoInscripcionEnum.retirado:
+            db_inscripcion.fecha_retiro = datetime.date.today()
+        else:
+            db_inscripcion.fecha_retiro = None
+            if db_inscripcion.fecha_inscripcion is None:
+                db_inscripcion.fecha_inscripcion = datetime.date.today()
         db.commit()
         db.refresh(db_inscripcion)
     return db_inscripcion
@@ -90,7 +100,7 @@ def get_talleres_resumen(db: Session, colegio_id: Optional[str] = None, usuario_
     resumen = []
     
     for t in talleres:
-        profesor = db.query(Usuario).filter(Usuario.id == t.profesor_id).first()
+        profesor = db.query(Usuario).filter(Usuario.id == t.profesor_id).execution_options(skip_tenant_filter=True).first()
         inscritos_count = db.query(Inscripcion).filter(
             Inscripcion.taller_id == t.id,
             Inscripcion.estado == EstadoInscripcionEnum.inscrito
@@ -228,7 +238,8 @@ def bulk_upsert_inscripciones(db: Session, taller_id: str, colegio_id: str, data
                 taller_id=taller_id,
                 alumno_id=alumno.id,
                 colegio_id=colegio_id,
-                estado=EstadoInscripcionEnum.inscrito
+                estado=EstadoInscripcionEnum.inscrito,
+                fecha_inscripcion=datetime.date.today()
             )
             db.add(nueva)
             stats["inserted"] += 1

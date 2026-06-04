@@ -1,0 +1,35 @@
+# Entorno virtual local (se reinstala con pip dentro de la imagen)
+venv/
+.venv/
+env/
+
+# Cachés y artefactos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secretos y configs locales (se inyectan por variables de entorno en runtime)
+.env
+.env.*
+
+# Datos / respaldos locales
+backups/
+*.sqlite3
+*.db
+
+# Pruebas (no necesarias en la imagen de producción)
+tests/
+
+# Control de versiones y meta del repo
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+
+# Documentación
+README*.md
+*.md

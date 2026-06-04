@@ -16,7 +16,14 @@
       "Bash(curl -s -i -X OPTIONS http://localhost:8001/api/inscripciones/resumen -H 'Origin: http://localhost:3002' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization')",
       "WebFetch(domain:localhost)",
       "Bash(Get-ChildItem *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(venv/Scripts/python.exe -m alembic heads)",
+      "Bash(venv/Scripts/python.exe -m alembic history)",
+      "Bash(venv/Scripts/python.exe -m alembic current)",
+      "Bash(grep -E \"\\\\.env$\")",
+      "Bash(venv/Scripts/python.exe -m pytest tests/ -q)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_tenant_isolation.py::test_listado_alumnos_solo_devuelve_colegio_propio -x)",
+      "PowerShell(Set-Location *)"
     ]
   }
 }

@@ -1,11 +1,20 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, distinct
 from modules.talleres.models import Taller
+from modules.colegios.models import Colegio
 from modules.sesiones.models import Sesion
-from modules.asistencias.models import Asistencia
+from modules.asistencias.models import Asistencia, EstadoAsistenciaEnum
 from modules.inscripciones.models import Inscripcion, EstadoInscripcionEnum
 from typing import List, Dict
 import datetime
+
+# Estados que cuentan como "asistió" en el numerador. Solo 'ausente' baja el %.
+ESTADOS_PRESENCIA = {
+    EstadoAsistenciaEnum.presente,
+    EstadoAsistenciaEnum.atraso,
+    EstadoAsistenciaEnum.justificado,
+}
+META_POR_DEFECTO = 85
 
 def get_monthly_attendance_report(db: Session, colegio_id: str, mes: int, anio: int):
     # 1. Obtener todos los talleres del colegio y periodo
@@ -211,6 +220,134 @@ def get_annual_attendance_report(db: Session, colegio_id: str, anio: int):
         "promedio_anual": round((total_presentes_anio / total_capacidad_anio * 100), 1) if total_capacidad_anio > 0 else 0
     }
 
+def get_metas_report(db: Session, colegio_id: str, mes: int, anio: int):
+    """Reporte de cumplimiento de metas por taller (semanal y mensual).
+
+    El % se calcula SOBRE LA LISTA REGISTRADA: denominador = todos los registros de
+    asistencia de las sesiones del rango; numerador = registros en estado
+    presente/atraso/justificado (solo 'ausente' baja el %). Se excluyen los registros
+    de alumnos cuya fecha de retiro del taller es anterior a la fecha de la sesión,
+    para conservar el histórico exacto.
+    """
+    colegio = db.query(Colegio).filter(Colegio.id == colegio_id).first()
+    colegio_meta = (colegio.meta_asistencia if colegio and colegio.meta_asistencia else META_POR_DEFECTO)
+
+    talleres = db.query(Taller).filter(
+        Taller.colegio_id == colegio_id,
+        Taller.periodo == anio,
+        Taller.is_active == True
+    ).all()
+    taller_ids = [t.id for t in talleres]
+
+    sesiones = []
+    if taller_ids:
+        sesiones = db.query(Sesion).filter(
+            Sesion.taller_id.in_(taller_ids),
+            extract('month', Sesion.fecha_sesion) == mes,
+            extract('year', Sesion.fecha_sesion) == anio
+        ).all()
+
+    # Mapa sesion_id -> (taller_id, fecha)
+    sesion_info = {str(s.id): (str(s.taller_id), s.fecha_sesion) for s in sesiones}
+    sesion_ids = list(sesion_info.keys())
+
+    # Asistencias de esas sesiones
+    asistencias = []
+    if sesion_ids:
+        asistencias = db.query(
+            Asistencia.sesion_id, Asistencia.alumno_id, Asistencia.estado_asistencia
+        ).filter(Asistencia.sesion_id.in_(sesion_ids)).all()
+
+    # Mapa de fechas de retiro: (alumno_id, taller_id) -> fecha_retiro (solo retirados)
+    retiro_map = {}
+    if taller_ids:
+        retiros = db.query(
+            Inscripcion.alumno_id, Inscripcion.taller_id, Inscripcion.fecha_retiro
+        ).filter(
+            Inscripcion.taller_id.in_(taller_ids),
+            Inscripcion.estado == EstadoInscripcionEnum.retirado,
+            Inscripcion.fecha_retiro.isnot(None)
+        ).all()
+        retiro_map = {(str(r.alumno_id), str(r.taller_id)): r.fecha_retiro for r in retiros}
+
+    def _build(sesiones_subset):
+        subset_ids = {str(s.id) for s in sesiones_subset}
+        # acumuladores por taller
+        acc = {tid: {"asistencias": 0, "registros": 0} for tid in [str(t.id) for t in talleres]}
+        for sesion_id, alumno_id, estado in asistencias:
+            sid = str(sesion_id)
+            if sid not in subset_ids:
+                continue
+            taller_id, fecha = sesion_info[sid]
+            # Excluir registros posteriores al retiro del alumno en ese taller
+            retiro = retiro_map.get((str(alumno_id), taller_id))
+            if retiro and retiro < fecha:
+                continue
+            if taller_id not in acc:
+                continue
+            acc[taller_id]["registros"] += 1
+            if estado in ESTADOS_PRESENCIA:
+                acc[taller_id]["asistencias"] += 1
+
+        items = []
+        tot_asist = 0
+        tot_reg = 0
+        for t in talleres:
+            tid = str(t.id)
+            a = acc[tid]["asistencias"]
+            r = acc[tid]["registros"]
+            tot_asist += a
+            tot_reg += r
+            meta = t.meta_asistencia if t.meta_asistencia else colegio_meta
+            pct = round((a / r) * 100, 1) if r > 0 else 0.0
+            items.append({
+                "taller_id": t.id,
+                "nombre_taller": t.nombre_taller,
+                "asistencias": a,
+                "registros": r,
+                "porcentaje": pct,
+                "meta": meta,
+                "cumple": r > 0 and pct >= meta,
+            })
+        # Ordenar por asistencia (nº) descendente; desempate por porcentaje
+        items.sort(key=lambda x: (x["asistencias"], x["porcentaje"]), reverse=True)
+        total_pct = round((tot_asist / tot_reg) * 100, 1) if tot_reg > 0 else 0.0
+        total = {
+            "asistencias": tot_asist,
+            "registros": tot_reg,
+            "porcentaje": total_pct,
+            "meta": colegio_meta,
+            "cumple": tot_reg > 0 and total_pct >= colegio_meta,
+        }
+        return items, total
+
+    mensual, total_mensual = _build(sesiones)
+
+    # Agrupar las sesiones del mes por semana ISO (para navegar semana a semana)
+    semanas_map = {}
+    for s in sesiones:
+        wk = s.fecha_sesion.isocalendar()[1]
+        semanas_map.setdefault(wk, []).append(s)
+
+    semanas = []
+    for wk in sorted(semanas_map.keys()):
+        grupo = semanas_map[wk]
+        items_s, total_s = _build(grupo)
+        fechas = [s.fecha_sesion for s in grupo]
+        semanas.append({
+            "semana_inicio": min(fechas).isoformat(),
+            "semana_fin": max(fechas).isoformat(),
+            "items": items_s,
+            "total": total_s,
+        })
+
+    return {
+        "mensual": mensual,
+        "total_mensual": total_mensual,
+        "semanas": semanas,
+    }
+
+
 def get_weekly_summary_report(db: Session, colegio_id: str, semanas_atras: int = 0):
     hoy = datetime.date.today()
     
@@ -290,31 +427,32 @@ def get_weekly_summary_report(db: Session, colegio_id: str, semanas_atras: int =
                 date_to_sessions[dt_str] = []
             date_to_sessions[dt_str].append(s.id)
             
+        # Porcentaje de asistencia del último día CON actividad (sesiones), para comparar
+        # contra él aunque el día calendario inmediatamente anterior no haya tenido talleres.
+        porcentaje_ultimo_activo = None
+
         for i in range(5):  # Lunes a Viernes
             day_date = inicio_lunes + datetime.timedelta(days=i)
             day_date_str = day_date.strftime("%Y-%m-%d")
             session_ids = date_to_sessions.get(day_date_str, [])
             presentes_dia = sum(asistencias_map.get(sid, 0) for sid in session_ids)
-            
+
             # Calcular matrícula de los talleres con sesiones hoy
             unique_taller_ids = set(sesion_obj_map[sid].taller_id for sid in session_ids if sid in sesion_obj_map)
             matricula_total_dia = sum(enrollment_map.get(str(tid), 0) for tid in unique_taller_ids)
-            
+
             porcentaje_asistencia = round((presentes_dia / matricula_total_dia) * 100, 1) if matricula_total_dia > 0 else 0.0
-            
-            # Obtener asistencia del día anterior
-            prev_date = day_date - datetime.timedelta(days=1)
-            prev_date_str = prev_date.strftime("%Y-%m-%d")
-            prev_session_ids = date_to_sessions.get(prev_date_str, [])
-            presentes_anterior = sum(asistencias_map.get(sid, 0) for sid in prev_session_ids)
-            
+
+            # Variación de asistencia en PUNTOS PORCENTUALES (pp) respecto al último día con
+            # actividad, no como porcentaje relativo. Ej: 58.3% → 79.2% = +20.9 pp.
+            # Si el día anterior del calendario no tuvo talleres, se compara contra el último
+            # día que sí tuvo. El primer día con actividad de la semana no tiene referencia.
             diferencia_anterior = None
-            if i > 0:  # No se calcula para el lunes
-                if presentes_anterior > 0:
-                    diferencia_anterior = round(((presentes_dia - presentes_anterior) / presentes_anterior) * 100, 1)
-                else:
-                    diferencia_anterior = 100.0 if presentes_dia > 0 else 0.0
-            
+            if matricula_total_dia > 0:
+                if porcentaje_ultimo_activo is not None:
+                    diferencia_anterior = round(porcentaje_asistencia - porcentaje_ultimo_activo, 1)
+                porcentaje_ultimo_activo = porcentaje_asistencia
+
             days_list.append({
                 "fecha": day_date_str,
                 "dia": dias_nombres[i],

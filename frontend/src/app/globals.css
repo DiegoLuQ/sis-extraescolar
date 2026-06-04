@@ -33,9 +33,85 @@
     --ring: 190 86% 43%;
  
     --radius: 0.5rem;
+
+    --color-primary-50: #E6F7FF;
+    --color-primary-100: #B3E5FC;
+    --color-primary-200: #81D4FA;
+    --color-primary-300: #4FC3F7;
+    --color-primary-400: #29B6F6;
+    --color-primary-500: #00B4D8;
+    --color-primary-600: #0096C7;
+    --color-primary-700: #0077B6;
+    --color-primary-800: #025982;
+    --color-primary-900: #023E63;
   }
 }
- 
+
+.theme-verde-oscuro {
+  --color-primary-50: #E8F5E9;
+  --color-primary-100: #C8E6C9;
+  --color-primary-200: #A5D6A7;
+  --color-primary-300: #81C784;
+  --color-primary-400: #66BB6A;
+  --color-primary-500: #2E7D32;
+  --color-primary-600: #1B5E20;
+  --color-primary-700: #0E4413;
+  --color-primary-800: #052D09;
+  --color-primary-900: #021C04;
+}
+
+.theme-burdeo {
+  --color-primary-50: #FCE4EC;
+  --color-primary-100: #F8BBD0;
+  --color-primary-200: #F48FB1;
+  --color-primary-300: #F06292;
+  --color-primary-400: #EC407A;
+  --color-primary-500: #800020;
+  --color-primary-600: #66001A;
+  --color-primary-700: #4D0013;
+  --color-primary-800: #33000D;
+  --color-primary-900: #1A0006;
+}
+
+.theme-azul {
+  --color-primary-50: #E3F2FD;
+  --color-primary-100: #BBDEFB;
+  --color-primary-200: #90CAF9;
+  --color-primary-300: #64B5F6;
+  --color-primary-400: #42A5F5;
+  --color-primary-500: #1565C0;
+  --color-primary-600: #0D47A1;
+  --color-primary-700: #0A3580;
+  --color-primary-800: #07255C;
+  --color-primary-900: #041438;
+}
+
+.theme-anaranjado {
+  --color-primary-50: #FFF3E0;
+  --color-primary-100: #FFE0B2;
+  --color-primary-200: #FFCC80;
+  --color-primary-300: #FFB74D;
+  --color-primary-400: #FFA726;
+  --color-primary-500: #EF6C00;
+  --color-primary-600: #E65100;
+  --color-primary-700: #C14400;
+  --color-primary-800: #9E3700;
+  --color-primary-900: #752900;
+}
+
+.theme-calipso {
+  --color-primary-50: #E6F7FF;
+  --color-primary-100: #B3E5FC;
+  --color-primary-200: #81D4FA;
+  --color-primary-300: #4FC3F7;
+  --color-primary-400: #29B6F6;
+  --color-primary-500: #00B4D8;
+  --color-primary-600: #0096C7;
+  --color-primary-700: #0077B6;
+  --color-primary-800: #025982;
+  --color-primary-900: #023E63;
+}
+
 @layer base {
   * {
     @apply border-border;

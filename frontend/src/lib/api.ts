@@ -8,8 +8,10 @@ import type {
   Inscripcion, InscripcionCreate, InscripcionUpdate,
   Sesion, SesionCreate,
   Asistencia, AsistenciaCreate,
-  TallerOcupacion, AusentismoTaller, AlertaInasistencia,
-  Colegio, ColegioCreate, ColegioUpdate
+  NotaComportamiento, NotaComportamientoCreate,
+  TallerOcupacion, AusentismoTaller, AlertaInasistencia, AlumnoAsistenciaDetalle,
+  Colegio, ColegioCreate, ColegioUpdate,
+  MetasReport
 } from '@/types';
 import type { Permiso } from '@/types/permisos';
 
@@ -107,6 +109,41 @@ export const usuariosApi = {
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/api/usuarios/${id}`);
+  },
+  downloadTemplate: async (): Promise<Blob> => {
+    const response = await api.get('/api/usuarios/template', { responseType: 'blob' });
+    return response.data;
+  },
+  exportUsuarios: async (): Promise<Blob> => {
+    const response = await api.get('/api/usuarios/export', { responseType: 'blob' });
+    return response.data;
+  },
+  bulkUpload: async (file: File, targetColegioId?: string): Promise<any> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const url = targetColegioId
+      ? `/api/usuarios/bulk-upload?target_colegio_id=${targetColegioId}`
+      : '/api/usuarios/bulk-upload';
+    const response = await api.post(url, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+  getImpactoEliminacion: async (ids: string[]): Promise<{
+    usuarios: { id: string; nombre: string; nombre_2: string | null }[];
+    talleres: number;
+    sesiones: number;
+    inscripciones: number;
+    asistencias: number;
+    notas: number;
+    tiene_dependencias: boolean;
+  }> => {
+    const response = await api.post('/api/usuarios/impacto-eliminacion', { ids });
+    return response.data;
+  },
+  bulkDelete: async (ids: string[], permanente = false): Promise<{ detail: string; permanente: boolean; resultado: any }> => {
+    const response = await api.post('/api/usuarios/bulk-delete', { ids, permanente });
+    return response.data;
   },
 };
 
@@ -278,11 +315,26 @@ export const asistenciaApi = {
     const response = await api.get<any[]>('/api/asistencias/historial/alertas');
     return response.data;
   },
+  getNotasComportamiento: async (sesionId: string): Promise<NotaComportamiento[]> => {
+    const response = await api.get<NotaComportamiento[]>(`/api/asistencias/comportamiento/${sesionId}`);
+    return response.data;
+  },
+  createNotaComportamiento: async (data: NotaComportamientoCreate): Promise<NotaComportamiento> => {
+    const response = await api.post<NotaComportamiento>('/api/asistencias/comportamiento', data);
+    return response.data;
+  },
+  deleteNotaComportamiento: async (notaId: string): Promise<void> => {
+    await api.delete(`/api/asistencias/comportamiento/${notaId}`);
+  },
 };
 
 export const colegiosApi = {
   getAll: async (): Promise<Colegio[]> => {
     const response = await api.get<Colegio[]>('/api/colegios');
+    return response.data;
+  },
+  getUsuariosCount: async (): Promise<Record<string, number>> => {
+    const response = await api.get<Record<string, number>>('/api/colegios/usuarios-count');
     return response.data;
   },
   getById: async (id: string): Promise<Colegio> => {
@@ -357,6 +409,10 @@ export const estadisticasApi = {
     const response = await api.get<AlertaInasistencia[]>('/api/estadisticas/alertas-inasistencias');
     return response.data;
   },
+  detalleAsistencia: async (alumnoId: string): Promise<AlumnoAsistenciaDetalle> => {
+    const response = await api.get<AlumnoAsistenciaDetalle>(`/api/estadisticas/detalle-asistencia/${alumnoId}`);
+    return response.data;
+  },
 };
 
 export const reportesApi = {
@@ -374,6 +430,10 @@ export const reportesApi = {
   },
   getResumenSemana: async (semanasAtras: number = 0) => {
     const response = await api.get('/api/reportes/resumen-semana', { params: { semanas_atras: semanasAtras } });
+    return response.data;
+  },
+  getMetas: async (mes: number, anio: number): Promise<MetasReport> => {
+    const response = await api.get('/api/reportes/metas', { params: { mes, anio } });
     return response.data;
   },
 };

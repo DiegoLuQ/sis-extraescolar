@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { toPng } from "html-to-image";
 import { reportesApi } from "@/lib/api";
+import { useAuthStore } from "@/store/authStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,15 +27,21 @@ import {
   TabsList, 
   TabsTrigger 
 } from "../../../components/ui/tabs";
-import { Loader2, FileDown, Calendar, Users, TrendingUp, Filter, BarChart, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Activity, Sparkles } from "lucide-react";
+import { Loader2, FileDown, Calendar, Users, TrendingUp, Filter, BarChart, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Activity, Sparkles, ImageDown } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 export default function ReportesPage() {
+  const { user } = useAuthStore();
+  const metasExportRef = useRef<HTMLDivElement>(null);
+  const [exportingImg, setExportingImg] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState<any>(null);
   const [weeklyData, setWeeklyData] = useState<any>(null);
   const [annualData, setAnnualData] = useState<any>(null);
+  const [metasData, setMetasData] = useState<any>(null);
+  const [metasRango, setMetasRango] = useState<"semanal" | "mensual">("mensual");
+  const [metasSemanaIdx, setMetasSemanaIdx] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>("mensual");
   const [mes, setMes] = useState<string>((new Date().getMonth() + 1).toString());
   const [anio, setAnio] = useState<string>(new Date().getFullYear().toString());
@@ -83,22 +91,63 @@ export default function ReportesPage() {
     fetchResumenSemana(semanasAtras);
   }, [semanasAtras]);
 
+  // Al cargar el reporte de metas, posicionar en la última semana con actividad.
+  useEffect(() => {
+    if (metasData?.semanas?.length) {
+      setMetasSemanaIdx(metasData.semanas.length - 1);
+    }
+  }, [metasData]);
+
   const fetchAllReports = async () => {
     setLoading(true);
     try {
-      const [mensual, semanal, anual] = await Promise.all([
+      const [mensual, semanal, anual, metas] = await Promise.all([
         reportesApi.getAsistenciaMensual(parseInt(mes), parseInt(anio)),
         reportesApi.getAsistenciaSemanal(parseInt(mes), parseInt(anio)),
-        reportesApi.getAsistenciaAnual(parseInt(anio))
+        reportesApi.getAsistenciaAnual(parseInt(anio)),
+        reportesApi.getMetas(parseInt(mes), parseInt(anio))
       ]);
       setReportData(mensual);
       setWeeklyData(semanal);
       setAnnualData(anual);
+      setMetasData(metas);
     } catch (error) {
       console.error("Error fetching reports:", error);
       toast.error("Error al cargar los reportes");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Color del encabezado de la imagen según el colegio activo.
+  const colegioNombre = user?.nombre_colegio || "";
+  const getColegioColor = () => {
+    const n = colegioNombre.toLowerCase();
+    if (n.includes("macaya")) return "#14532d";      // verde oscuro
+    if (n.includes("portales")) return "#1e3a8a";    // azul oscuro
+    return "#0f172a";                                 // gris pizarra por defecto
+  };
+
+  const handleExportMetasImage = async () => {
+    if (!metasExportRef.current) return;
+    setExportingImg(true);
+    try {
+      const dataUrl = await toPng(metasExportRef.current, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+      });
+      const mesLabel = meses.find((m) => m.value === mes)?.label || mes;
+      const link = document.createElement("a");
+      link.download = `metas-${colegioNombre}-${mesLabel}-${anio}.png`.replace(/\s+/g, "_");
+      link.href = dataUrl;
+      link.click();
+      toast.success("Imagen exportada");
+    } catch (error) {
+      console.error("Error exporting image:", error);
+      toast.error("Error al exportar la imagen");
+    } finally {
+      setExportingImg(false);
     }
   };
 
@@ -184,11 +233,11 @@ export default function ReportesPage() {
           <CardContent className="pt-6">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Días con Actividad</p>
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Días con Actividad {activeTab === "anual" ? "· Año" : "· Mes"}</p>
                 <h3 className="text-3xl font-black mt-1 text-gray-700">
-                  {activeTab === "mensual" ? (reportData?.active_days?.length || 0) : 
-                   activeTab === "semanal" ? (weeklyData?.active_days_count || 0) : 
-                   (annualData?.months?.length || 0)}
+                  {activeTab === "anual" ? (annualData?.months?.length || 0) :
+                   activeTab === "semanal" ? (weeklyData?.active_days_count || 0) :
+                   (reportData?.active_days?.length || 0)}
                 </h3>
               </div>
               <div className="p-2 bg-blue-50 rounded-lg shrink-0">
@@ -202,7 +251,7 @@ export default function ReportesPage() {
           <CardContent className="pt-6">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Capacidad Citada</p>
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Capacidad Citada {activeTab === "anual" ? "· Año" : "· Mes"}</p>
                 <h3 className="text-3xl font-black mt-1 text-gray-700">
                   {activeTab === "anual" ? (
                     annualData?.total_capacidad_anio || 0
@@ -212,6 +261,7 @@ export default function ReportesPage() {
                     reportData?.daily_stats ? Object.values(reportData.daily_stats).reduce((acc: any, curr: any) => acc + (curr as any).matricula_total, 0) : 0
                   )}
                 </h3>
+                <p className="text-[10px] text-gray-400 mt-2 italic">* Suma de cupos por sesión dictada; un taller que se repite cuenta cada día</p>
               </div>
               <div className="p-2 bg-orange-50 rounded-lg shrink-0">
                 <BarChart className="h-5 w-5 text-orange-500" />
@@ -333,7 +383,49 @@ export default function ReportesPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-calipso-500" />
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="space-y-4">
+                {/* KPIs de la semana seleccionada (cambian al navegar) */}
+                {(() => {
+                  const dias = resumenSemana?.semana_actual || [];
+                  const presentesSem = dias.reduce((a: number, d: any) => a + (d.presentes || 0), 0);
+                  const capacidadSem = dias.reduce((a: number, d: any) => a + (d.matricula_total || 0), 0);
+                  const diasActividad = dias.filter((d: any) => (d.matricula_total || 0) > 0 || (d.presentes || 0) > 0).length;
+                  const rendimientoSem = capacidadSem > 0 ? ((presentesSem / capacidadSem) * 100).toFixed(1) : "0.0";
+                  return (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50/60 border border-blue-100">
+                        <div>
+                          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Días con Actividad</p>
+                          <p className="text-2xl font-black text-gray-800 mt-0.5">{diasActividad}</p>
+                        </div>
+                        <Calendar className="h-5 w-5 text-blue-400 shrink-0" />
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-green-50/60 border border-green-100">
+                        <div>
+                          <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Presentes (Semana)</p>
+                          <p className="text-2xl font-black text-gray-800 mt-0.5">{presentesSem}</p>
+                        </div>
+                        <Users className="h-5 w-5 text-green-400 shrink-0" />
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-orange-50/60 border border-orange-100">
+                        <div>
+                          <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Capacidad Citada</p>
+                          <p className="text-2xl font-black text-gray-800 mt-0.5">{capacidadSem}</p>
+                        </div>
+                        <BarChart className="h-5 w-5 text-orange-400 shrink-0" />
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-calipso-50/60 border border-calipso-100">
+                        <div>
+                          <p className="text-[10px] font-bold text-calipso-600 uppercase tracking-wider">Rendimiento</p>
+                          <p className="text-2xl font-black text-calipso-700 mt-0.5">{rendimientoSem}%</p>
+                        </div>
+                        <TrendingUp className="h-5 w-5 text-calipso-400 shrink-0" />
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {resumenSemana?.semana_actual?.map((day: any) => {
                   const isMonday = day.dia === "Lunes";
                   return (
@@ -376,22 +468,22 @@ export default function ReportesPage() {
                             const diff = day.diferencia_anterior;
                             if (diff > 0) {
                               return (
-                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700" title="Variación en puntos porcentuales vs día anterior">
                                   <ArrowUpRight className="h-3 w-3 text-emerald-600 shrink-0" />
-                                  +{diff}%
+                                  +{diff} pp
                                 </span>
                               );
                             } else if (diff < 0) {
                               return (
-                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-50 text-rose-700" title="Variación en puntos porcentuales vs día anterior">
                                   <ArrowDownRight className="h-3 w-3 text-rose-600 shrink-0" />
-                                  {diff}%
+                                  {diff} pp
                                 </span>
                               );
                             } else {
                               return (
-                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                                  0%
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500" title="Sin variación vs día anterior">
+                                  0 pp
                                 </span>
                               );
                             }
@@ -401,6 +493,7 @@ export default function ReportesPage() {
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </CardContent>
@@ -412,6 +505,7 @@ export default function ReportesPage() {
           <TabsTrigger value="mensual" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Matriz Mensual</TabsTrigger>
           <TabsTrigger value="semanal" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Resumen Semanal</TabsTrigger>
           <TabsTrigger value="anual" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Consolidado Anual</TabsTrigger>
+          <TabsTrigger value="metas" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Metas por Taller</TabsTrigger>
         </TabsList>
 
         {/* CONTENIDO MENSUAL */}
@@ -630,6 +724,157 @@ export default function ReportesPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="metas" className="space-y-4">
+          {(() => {
+            const esSemanal = metasRango === "semanal";
+            const semanas = metasData?.semanas || [];
+            const idx = Math.min(metasSemanaIdx, Math.max(0, semanas.length - 1));
+            const semActual = semanas[idx];
+            const mesLabel = meses.find((m) => m.value === mes)?.label || mes;
+            const rangoLabel = esSemanal ? "Semanal" : "Mensual";
+            const fmtCorto = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" });
+            const fmtLargo = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" });
+
+            const rawItems = esSemanal ? (semActual?.items || []) : (metasData?.mensual || []);
+            const items = [...rawItems].sort((a: any, b: any) => b.asistencias - a.asistencias || b.porcentaje - a.porcentaje);
+            const total = esSemanal ? semActual?.total : metasData?.total_mensual;
+            const periodoTexto = esSemanal
+              ? (semActual ? `${fmtCorto(semActual.semana_inicio)} al ${fmtLargo(semActual.semana_fin)}` : `${mesLabel} ${anio}`)
+              : `${mesLabel} ${anio}`;
+            return (
+              <>
+                {/* Controles (no se incluyen en la imagen) */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+                      <button
+                        onClick={() => setMetasRango("semanal")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${metasRango === "semanal" ? "bg-white text-calipso-900 shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+                      >
+                        Semanal
+                      </button>
+                      <button
+                        onClick={() => setMetasRango("mensual")}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${metasRango === "mensual" ? "bg-white text-calipso-900 shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+                      >
+                        Mensual
+                      </button>
+                    </div>
+
+                    {/* Navegación entre semanas del mes */}
+                    {esSemanal && (
+                      <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-lg border border-gray-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-gray-600 hover:bg-white hover:shadow-sm"
+                          disabled={idx <= 0}
+                          onClick={() => setMetasSemanaIdx((i) => Math.max(0, i - 1))}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-[11px] font-black text-gray-700 px-1 min-w-[110px] text-center select-none">
+                          {semanas.length > 0 ? `Semana ${idx + 1} de ${semanas.length}` : "Sin semanas"}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-gray-600 hover:bg-white hover:shadow-sm"
+                          disabled={idx >= semanas.length - 1}
+                          onClick={() => setMetasSemanaIdx((i) => Math.min(semanas.length - 1, i + 1))}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 text-xs font-bold w-full sm:w-auto"
+                    onClick={handleExportMetasImage}
+                    disabled={exportingImg}
+                  >
+                    {exportingImg ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <ImageDown className="h-3.5 w-3.5 mr-2" />}
+                    Exportar Imagen
+                  </Button>
+                </div>
+
+                {/* Contenedor capturado como imagen */}
+                <div ref={metasExportRef} className="bg-white overflow-hidden rounded-xl border border-gray-100 shadow-md">
+                  {/* Encabezado con color según colegio */}
+                  <div className="px-6 py-4 text-white" style={{ backgroundColor: getColegioColor() }}>
+                    <p className="text-lg font-black leading-tight">{colegioNombre || "Colegio"}</p>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-white/80 flex items-center gap-2">
+                        <TrendingUp className="h-3.5 w-3.5" />
+                        Cumplimiento de Metas por Taller · {rangoLabel}
+                      </p>
+                      <p className="text-xs font-bold text-white/90">{periodoTexto}</p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto w-full">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50">
+                          <TableHead className="font-bold text-gray-900">Taller</TableHead>
+                          <TableHead className="text-center font-bold text-gray-900">Asistencia (nº y %)</TableHead>
+                          <TableHead className="text-right font-bold text-gray-900">Meta</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.length > 0 ? (
+                          <>
+                            {items.map((item: any) => (
+                              <TableRow key={item.taller_id}>
+                                <TableCell className="font-bold text-gray-700">{item.nombre_taller}</TableCell>
+                                <TableCell className="text-center">
+                                  <span className="font-medium text-gray-600">{item.asistencias}/{item.registros}</span>
+                                  <span className={`ml-2 font-black ${item.cumple ? "text-green-600" : "text-red-500"}`}>
+                                    {item.porcentaje}%
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${item.cumple ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                    {item.meta}%
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {total && (
+                              <TableRow className="bg-gray-50 border-t-2">
+                                <TableCell className="font-black text-gray-900">TOTAL COLEGIO</TableCell>
+                                <TableCell className="text-center">
+                                  <span className="font-medium text-gray-600">{total.asistencias}/{total.registros}</span>
+                                  <span className={`ml-2 font-black ${total.cumple ? "text-green-600" : "text-red-500"}`}>
+                                    {total.porcentaje}%
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${total.cumple ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                    {total.meta}%
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </>
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-10 text-gray-400 italic">
+                              No hay registros de asistencia en el rango seleccionado.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </TabsContent>
       </Tabs>
     </div>

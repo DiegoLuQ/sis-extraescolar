@@ -34,7 +34,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2, Loader2, Users } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Search, Pencil, Trash2, Loader2, Users, FileDown, Upload, FileSpreadsheet } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 
 export default function UsuariosPage() {
@@ -63,16 +64,41 @@ export default function UsuariosPage() {
 
   const [loadingModal, setLoadingModal] = useState(false);
 
+  // Carga masiva por Excel
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isSchoolModalOpen, setIsSchoolModalOpen] = useState(false);
+  const [selectedColegioId, setSelectedColegioId] = useState<string>("");
+
+  // Eliminación masiva (admin y coordinador)
+  const puedeEliminar = user?.rol === "admin" || user?.rol === "coordinador";
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deletingBulk, setDeletingBulk] = useState(false);
+  const [estadoFilter, setEstadoFilter] = useState<"activos" | "inactivos" | "todos">("activos");
+
+  // Modal de eliminación en cascada (con confirmación por nombre)
+  const [deleteModal, setDeleteModal] = useState<{
+    ids: string[];
+    usuarios: { id: string; nombre: string; nombre_2: string | null }[];
+    impacto: { talleres: number; sesiones: number; inscripciones: number; asistencias: number; notas: number };
+    expected: string;
+  } | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [processingDelete, setProcessingDelete] = useState(false);
+
   useEffect(() => {
     fetchUsuarios();
     fetchColegios();
   }, []);
 
   useEffect(() => {
-    if (user && user.rol !== "admin" && !editingUsuario) {
-      const activeSchoolId = localStorage.getItem("colegio_id");
-      if (activeSchoolId) {
-        setFormData((prev) => ({ ...prev, colegio_id: activeSchoolId }));
+    if (user) {
+      if (user.rol === "admin") {
+        setEstadoFilter("todos");
+      } else if (!editingUsuario) {
+        const activeSchoolId = localStorage.getItem("colegio_id");
+        if (activeSchoolId) {
+          setFormData((prev) => ({ ...prev, colegio_id: activeSchoolId }));
+        }
       }
     }
   }, [user]);
@@ -102,6 +128,104 @@ export default function UsuariosPage() {
   const getNombreColegio = (colegioId: string) => {
     const c = colegios.find((c) => c.id === colegioId);
     return c?.nombre_colegio || "—";
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const blob = await usuariosApi.downloadTemplate();
+      downloadBlob(blob, "planilla_usuarios.xlsx");
+    } catch (error) {
+      console.error("Error downloading template:", error);
+      toast.error("Error al descargar la planilla");
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const blob = await usuariosApi.exportUsuarios();
+      downloadBlob(blob, "usuarios.xlsx");
+    } catch (error) {
+      console.error("Error exporting users:", error);
+      toast.error("Error al exportar usuarios");
+    }
+  };
+
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // El admin debe elegir el colegio de destino
+    if (user?.rol === "admin") {
+      setPendingFile(file);
+      setSelectedColegioId("");
+      setIsSchoolModalOpen(true);
+      e.target.value = "";
+      return;
+    }
+
+    await executeBulkUpload(file);
+    e.target.value = "";
+  };
+
+  const executeBulkUpload = async (file: File, colegioId?: string) => {
+    setSaving(true);
+    try {
+      const result = await usuariosApi.bulkUpload(file, colegioId);
+      const { stats } = result;
+      toast.success(
+        `Importación completada — Insertados: ${stats.inserted}, Omitidos: ${stats.skipped}, Errores: ${stats.errors}`
+      );
+      await fetchUsuarios();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al subir el archivo");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmBulkUpload = async () => {
+    if (!pendingFile || !selectedColegioId) {
+      toast.error("Debes seleccionar un colegio");
+      return;
+    }
+    await executeBulkUpload(pendingFile, selectedColegioId);
+    setIsSchoolModalOpen(false);
+    setPendingFile(null);
+    setSelectedColegioId("");
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const toggleSelectAll = (ids: string[]) => {
+    const allSelected = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+    setSelectedIds(
+      allSelected
+        ? selectedIds.filter((id) => !ids.includes(id))
+        : Array.from(new Set([...selectedIds, ...ids]))
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setDeletingBulk(true);
+    try {
+      await openDelete(selectedIds);
+    } finally {
+      setDeletingBulk(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -146,20 +270,60 @@ export default function UsuariosPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    const ok = await confirmDialog({
-      title: "Eliminar usuario",
-      description: "¿Estás seguro de eliminar este usuario?",
-      confirmText: "Eliminar",
-      destructive: true,
-    });
-    if (!ok) return;
+  const ejecutarEliminacion = async (ids: string[]) => {
+    const res = await usuariosApi.bulkDelete(ids, user?.rol === "admin");
+    const r = res.resultado;
+    if (res.permanente) {
+      toast.success(
+        `Eliminado físicamente: ${r.usuarios} usuario(s), ${r.talleres} taller(es), ${r.sesiones} sesión(es), ${r.inscripciones} inscripción(es)`
+      );
+    } else {
+      toast.success(
+        `Desactivado(s): ${r.usuarios} usuario(s), ${r.talleres} taller(es) desactivado(s), ${r.inscripciones} inscripción(es) retirada(s)`
+      );
+    }
+    setSelectedIds([]);
+    await fetchUsuarios();
+  };
+
+  // Punto de entrada para eliminar (individual o masivo). Calcula el impacto y,
+  // si hay dependencias, abre el modal que exige digitar el nombre/login.
+  const openDelete = async (ids: string[]) => {
+    if (ids.length === 0) return;
     try {
-      await usuariosApi.delete(id);
-      toast.success("Usuario eliminado");
-      await fetchUsuarios();
+      const imp = await usuariosApi.getImpactoEliminacion(ids);
+      if (!imp.tiene_dependencias) {
+        const ok = await confirmDialog({
+          title: ids.length > 1 ? "Eliminar usuarios" : "Eliminar usuario",
+          description: "Se desactivará(n) el/los usuario(s) seleccionado(s). Acción reversible reactivándolos.",
+          confirmText: "Eliminar",
+          destructive: true,
+        });
+        if (!ok) return;
+        await ejecutarEliminacion(ids);
+        return;
+      }
+      const expected = imp.usuarios.length === 1 ? imp.usuarios[0].nombre : "ELIMINAR";
+      setConfirmText("");
+      setDeleteModal({ ids, usuarios: imp.usuarios, impacto: imp, expected });
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Error al eliminar el usuario");
+      toast.error(error?.response?.data?.detail || "Error al calcular el impacto de la eliminación");
+    }
+  };
+
+  const handleDelete = (id: string) => openDelete([id]);
+
+  const confirmDeleteCascada = async () => {
+    if (!deleteModal) return;
+    setProcessingDelete(true);
+    try {
+      await ejecutarEliminacion(deleteModal.ids);
+      setDeleteModal(null);
+      setConfirmText("");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || "Error al eliminar");
+    } finally {
+      setProcessingDelete(false);
     }
   };
 
@@ -222,13 +386,18 @@ export default function UsuariosPage() {
     }
   };
 
-  const filteredUsuarios = usuarios.filter(
-    (u) =>
-      u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (u.nombre_2 || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (u.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.rol.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsuarios = usuarios.filter((u) => {
+    // Filtro por estado (activos/inactivos/todos)
+    if (estadoFilter === "activos" && !u.is_active) return false;
+    if (estadoFilter === "inactivos" && u.is_active) return false;
+    const q = searchTerm.toLowerCase();
+    return (
+      u.nombre.toLowerCase().includes(q) ||
+      (u.nombre_2 || "").toLowerCase().includes(q) ||
+      (u.email || "").toLowerCase().includes(q) ||
+      u.rol.toLowerCase().includes(q)
+    );
+  });
 
   const getRolBadge = (rol: string) => {
     switch (rol) {
@@ -264,6 +433,30 @@ export default function UsuariosPage() {
               <Button variant="outline" onClick={handleOpenOtrosMonitores} className="border-gray-200">
                 <Users className="h-4 w-4 mr-2" />
                 Otros Monitores
+              </Button>
+              <Button variant="outline" onClick={handleDownloadTemplate} className="border-gray-200">
+                <FileDown className="h-4 w-4 mr-2" />
+                Plantilla
+              </Button>
+              <input
+                type="file"
+                id="bulk-upload-usuarios"
+                accept=".xlsx"
+                className="hidden"
+                onChange={handleBulkUpload}
+              />
+              <Button
+                variant="outline"
+                className="border-gray-200"
+                disabled={saving}
+                onClick={() => document.getElementById("bulk-upload-usuarios")?.click()}
+              >
+                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                Importar Excel
+              </Button>
+              <Button variant="outline" onClick={handleExport} className="border-gray-200">
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Exportar
               </Button>
             </>
           )}
@@ -438,6 +631,110 @@ export default function UsuariosPage() {
         </div>
       </div>
 
+      {/* Modal: Eliminación en cascada (confirmación por nombre) */}
+      <Dialog open={deleteModal !== null} onOpenChange={(open) => { if (!open) { setDeleteModal(null); setConfirmText(""); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Eliminar {deleteModal && deleteModal.usuarios.length > 1 ? `${deleteModal.usuarios.length} usuarios` : "usuario"}
+            </DialogTitle>
+            <DialogDescription>
+              Esta acción desactivará al/los usuario(s) y, en cascada, lo siguiente:
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteModal && (
+            <div className="space-y-3 py-1">
+              <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Usuario(s)</p>
+                <div className="flex flex-wrap gap-1">
+                  {deleteModal.usuarios.map((u) => (
+                    <Badge key={u.id} variant="secondary" className="text-[11px]">
+                      {u.nombre_2 || u.nombre} <span className="opacity-60 ml-1">({u.nombre})</span>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <ul className="text-sm text-gray-700 space-y-1">
+                <li className="flex justify-between"><span>Talleres que se desactivarán</span><span className="font-bold text-red-600">{deleteModal.impacto.talleres}</span></li>
+                <li className="flex justify-between"><span>Inscripciones que se retirarán</span><span className="font-bold text-red-600">{deleteModal.impacto.inscripciones}</span></li>
+              </ul>
+
+              <div className="rounded-lg border border-amber-100 bg-amber-50 p-2 text-[12px] text-amber-800">
+                Se <b>conservan</b> como histórico: {deleteModal.impacto.sesiones} sesión(es), {deleteModal.impacto.asistencias} asistencia(s) y {deleteModal.impacto.notas} nota(s). Los <b>alumnos no se eliminan</b> (solo se retira su inscripción).
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <Label htmlFor="confirm-delete" className="text-sm">
+                  Para confirmar, escribe{" "}
+                  <span className="font-mono font-bold text-gray-900">{deleteModal.expected}</span>
+                </Label>
+                <Input
+                  id="confirm-delete"
+                  autoFocus
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder={deleteModal.expected}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setDeleteModal(null); setConfirmText(""); }}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={processingDelete || !deleteModal || confirmText.trim() !== deleteModal.expected}
+              onClick={confirmDeleteCascada}
+            >
+              {processingDelete && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Eliminar definitivamente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Selección de colegio para carga masiva (admin) */}
+      <Dialog open={isSchoolModalOpen} onOpenChange={(open) => {
+        setIsSchoolModalOpen(open);
+        if (!open) { setPendingFile(null); setSelectedColegioId(""); }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Colegio de destino</DialogTitle>
+            <DialogDescription>
+              Selecciona el colegio al que se importarán los usuarios del archivo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label className="mb-2 block">Colegio</Label>
+            <Select value={selectedColegioId} onValueChange={setSelectedColegioId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un colegio..." />
+              </SelectTrigger>
+              <SelectContent>
+                {colegios.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.nombre_colegio}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setIsSchoolModalOpen(false); setPendingFile(null); setSelectedColegioId(""); }}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmBulkUpload} disabled={!selectedColegioId || saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Importar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal: Otros Monitores */}
       <Dialog open={isOtrosMonitoresOpen} onOpenChange={setIsOtrosMonitoresOpen}>
         <DialogContent className="max-w-2xl">
@@ -493,20 +790,54 @@ export default function UsuariosPage() {
 
       <Card className="border-0 shadow-md">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar usuarios..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-2 flex-1">
+              <Search className="h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar usuarios..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-sm"
+              />
+              {user?.rol === "admin" && (
+                <Select value={estadoFilter} onValueChange={(v) => setEstadoFilter(v as any)}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="activos">Activos</SelectItem>
+                    <SelectItem value="inactivos">Inactivos</SelectItem>
+                    <SelectItem value="todos">Todos</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            {puedeEliminar && selectedIds.length > 0 && (
+              <Button
+                variant="outline"
+                className="border-red-200 text-red-600 hover:bg-red-50 shrink-0"
+                disabled={deletingBulk}
+                onClick={handleBulkDelete}
+              >
+                {deletingBulk ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                Eliminar seleccionados ({selectedIds.length})
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                {puedeEliminar && (
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={filteredUsuarios.length > 0 && filteredUsuarios.every((u) => selectedIds.includes(u.id))}
+                      onCheckedChange={() => toggleSelectAll(filteredUsuarios.map((u) => u.id))}
+                      aria-label="Seleccionar todos"
+                    />
+                  </TableHead>
+                )}
                 <TableHead>Nombre Completo</TableHead>
                 <TableHead>Usuario</TableHead>
                 <TableHead>Email</TableHead>
@@ -519,13 +850,22 @@ export default function UsuariosPage() {
             <TableBody>
               {filteredUsuarios.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-400">
+                  <TableCell colSpan={puedeEliminar ? 8 : 7} className="text-center py-8 text-gray-400">
                     No hay usuarios registrados
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredUsuarios.map((usuario) => (
-                  <TableRow key={usuario.id}>
+                  <TableRow key={usuario.id} className={selectedIds.includes(usuario.id) ? "bg-red-50/30" : undefined}>
+                    {puedeEliminar && (
+                      <TableCell className="w-10">
+                        <Checkbox
+                          checked={selectedIds.includes(usuario.id)}
+                          onCheckedChange={() => toggleSelect(usuario.id)}
+                          aria-label={`Seleccionar ${usuario.nombre}`}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium">{usuario.nombre_2 || "—"}</TableCell>
                     <TableCell className="text-gray-500">{usuario.nombre}</TableCell>
                     <TableCell className="text-gray-500">{usuario.email || "—"}</TableCell>

@@ -10,16 +10,16 @@ module.exports = {
     extend: {
       colors: {
         calipso: {
-          50: '#E6F7FF',
-          100: '#B3E5FC',
-          200: '#81D4FA',
-          300: '#4FC3F7',
-          400: '#29B6F6',
-          500: '#00B4D8',
-          600: '#0096C7',
-          700: '#0077B6',
-          800: '#025982',
-          900: '#023E63',
+          50: 'var(--color-primary-50)',
+          100: 'var(--color-primary-100)',
+          200: 'var(--color-primary-200)',
+          300: 'var(--color-primary-300)',
+          400: 'var(--color-primary-400)',
+          500: 'var(--color-primary-500)',
+          600: 'var(--color-primary-600)',
+          700: 'var(--color-primary-700)',
+          800: 'var(--color-primary-800)',
+          900: 'var(--color-primary-900)',
         },
         indigo: {
           50: '#EEF2FF',

@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sis_backend
+    restart: always
+    ports:
+      - "${BACKEND_PORT}:8000"
+    environment:
+      - PORT=8000
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - EXTERNAL_DB_MC_URL=${EXTERNAL_DB_MC_URL}
+      - EXTERNAL_DB_DP_URL=${EXTERNAL_DB_DP_URL}
+      - MC_SENDER_EMAIL=${MC_SENDER_EMAIL}
+      - MC_SENDER_PASSWORD=${MC_SENDER_PASSWORD}
+      - DP_SENDER_EMAIL=${DP_SENDER_EMAIL}
+      - DP_SENDER_PASSWORD=${DP_SENDER_PASSWORD}
+      - FRONTEND_URL=${FRONTEND_URL}
+    networks:
+      - red_produccion
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    container_name: sis_frontend
+    restart: always
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - VIRTUAL_HOST=${VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
+    networks:
+      - red_produccion
+    depends_on:
+      - backend
+
+networks:
+  red_produccion:
+    external: true
+

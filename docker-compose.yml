@@ -7,8 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: sis_backend
     restart: always
-    ports:
-      - "${BACKEND_PORT}:8000"
+    # Ya no es estrictamente necesario exponer el puerto al host porque nginx-proxy enrutará el tráfico por la red interna
     environment:
       - PORT=8000
       - DATABASE_URL=${DATABASE_URL}
@@ -22,6 +21,8 @@ services:
       - DP_SENDER_EMAIL=${DP_SENDER_EMAIL}
       - DP_SENDER_PASSWORD=${DP_SENDER_PASSWORD}
       - FRONTEND_URL=${FRONTEND_URL}
+      - VIRTUAL_HOST=${VIRTUAL_HOST}
+      - VIRTUAL_PATH=/api/
     networks:
       - red_produccion
 
@@ -37,6 +38,7 @@ services:
       - PORT=3000
       - NODE_ENV=production
       - VIRTUAL_HOST=${VIRTUAL_HOST}
+      - VIRTUAL_PATH=/
       - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
       - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
     networks:

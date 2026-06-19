@@ -6,9 +6,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sis_backend
-    restart: unless-stopped
+    restart: always
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${BACKEND_PORT}:8000"
     environment:
       - PORT=8000
       - DATABASE_URL=${DATABASE_URL}
@@ -21,27 +21,30 @@ services:
       - MC_SENDER_PASSWORD=${MC_SENDER_PASSWORD}
       - DP_SENDER_EMAIL=${DP_SENDER_EMAIL}
       - DP_SENDER_PASSWORD=${DP_SENDER_PASSWORD}
-      - FRONTEND_URL=http://${SERVER_IP:-186.64.122.223}:${FRONTEND_PORT:-8091}
+      - FRONTEND_URL=${FRONTEND_URL}
     networks:
-      - base_red_pme
+      - red_produccion
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Next.js requiere que se le inyecte la API URL durante la compilación
-        - NEXT_PUBLIC_API_URL=http://${SERVER_IP:-186.64.122.223}:${BACKEND_PORT:-8000}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     container_name: sis_frontend
-    restart: unless-stopped
-    ports:
-      - "${FRONTEND_PORT:-8091}:3000"
+    restart: always
     environment:
       - PORT=3000
       - NODE_ENV=production
+      - VIRTUAL_HOST=${VIRTUAL_HOST}
+      - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
     networks:
-      - base_red_pme
+      - red_produccion
+    depends_on:
+      - backend
 
 networks:
-  base_red_pme:
+  red_produccion:
     external: true
+

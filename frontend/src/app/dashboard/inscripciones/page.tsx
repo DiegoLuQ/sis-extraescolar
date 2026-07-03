@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Loader2, Users, Calendar, Clock, BookOpen, ChevronRight, Trash2 } from "lucide-react";
+import { Plus, Search, Loader2, Users, Calendar, Clock, BookOpen, ChevronRight, Trash2, GraduationCap } from "lucide-react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { confirmDialog, alertDialog } from "@/components/ui/confirm-dialog";
@@ -343,6 +343,7 @@ export default function InscripcionesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTalleres.map((taller) => {
+          const tallerFull = talleres.find((t) => t.id === taller.id);
           const cardContent = (
             <Card className={cn(
               "border-0 shadow-md h-full flex flex-col transition-shadow",
@@ -365,7 +366,7 @@ export default function InscripcionesPage() {
                   </p>
                   {user?.rol === 'admin' && (
                     <p className="text-xs text-calipso-600 font-medium">
-                      {talleres.find(t => t.id === taller.id)?.nombre_colegio}
+                      {tallerFull?.nombre_colegio}
                     </p>
                   )}
                 </div>
@@ -379,6 +380,16 @@ export default function InscripcionesPage() {
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Clock className="h-4 w-4 text-gray-400" />
                     <span>{taller.hora_inicio} - {taller.hora_fin}</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-gray-600">
+                    <GraduationCap className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                    {tallerFull?.cursos_asignados ? (
+                      <span className="text-xs text-calipso-700 bg-calipso-50/80 px-1.5 py-0.5 rounded border border-calipso-100 font-medium">
+                        {tallerFull.cursos_asignados}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">Sin cursos asignados</span>
+                    )}
                   </div>
                 </div>
               </CardContent>

@@ -11,6 +11,13 @@ def get_correos_by_colegio(db: Session, colegio_id: Optional[str]) -> List[Corre
     return db.query(CorreoReporte).filter(CorreoReporte.colegio_id == str(colegio_id)).all()
 
 
+def get_correo_by_id(db: Session, correo_id: UUID, colegio_id: Optional[str] = None) -> Optional[CorreoReporte]:
+    query = db.query(CorreoReporte).filter(CorreoReporte.id == str(correo_id))
+    if colegio_id:
+        query = query.filter(CorreoReporte.colegio_id == str(colegio_id))
+    return query.first()
+
+
 def get_correos_habilitados_by_colegio(db: Session, colegio_id: str) -> List[CorreoReporte]:
     return db.query(CorreoReporte).filter(
         CorreoReporte.colegio_id == str(colegio_id),

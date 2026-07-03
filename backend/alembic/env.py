@@ -14,6 +14,7 @@ from modules.sesiones.models import Sesion
 from modules.asistencias.models import Asistencia
 from modules.roles.models import Rol, Permiso
 from modules.correos.models import CorreoReporte
+from modules.reportes_programados.models import ReporteProgramado
 from core.database import Base
 from core.config import settings
 

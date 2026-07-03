@@ -5,6 +5,20 @@ from modules.usuarios.schemas import UsuarioCreate, UsuarioUpdate
 from core.security import get_password_hash
 
 
+def cambiar_mi_password(db: Session, usuario_id: str, password: str) -> Usuario:
+    db_usuario = (
+        db.query(Usuario)
+        .execution_options(skip_tenant_filter=True)
+        .filter(Usuario.id == str(usuario_id))
+        .first()
+    )
+    if not db_usuario:
+        return None
+    db_usuario.password_hash = get_password_hash(password)
+    db.commit()
+    return db_usuario
+
+
 def get_usuarios(
     db: Session,
     colegio_id: UUID = None,

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 from typing import Optional, List
 
@@ -24,6 +24,10 @@ class UsuarioUpdate(BaseModel):
     rol: Optional[str] = None
     is_active: Optional[bool] = None
     colegio_id: Optional[UUID] = None
+
+
+class CambiarPasswordRequest(BaseModel):
+    password: str = Field(min_length=6)
 
 
 class UsuarioBulkDelete(BaseModel):

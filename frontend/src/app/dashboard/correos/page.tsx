@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Mail, Loader2, Trash2, XCircle, School } from "lucide-react";
+import { Plus, Mail, Loader2, Trash2, XCircle, School, Send } from "lucide-react";
 import type { Colegio } from "@/types";
 
 export default function CorreosPage() {
@@ -47,6 +47,7 @@ export default function CorreosPage() {
   const [newEmail, setNewEmail] = useState("");
   const [selectedColegioId, setSelectedColegioId] = useState<string>("");
   const [creating, setCreating] = useState(false);
+  const [enviandoId, setEnviandoId] = useState<string | null>(null);
   
   // Contexto
   const [userRole, setUserRole] = useState<string>("");
@@ -150,6 +151,18 @@ export default function CorreosPage() {
         prev.map((c) => (c.id === id ? { ...c, estado: currentEstado } : c))
       );
       toast.error("Error al cambiar el estado del correo");
+    }
+  };
+
+  const handleEnviarPrueba = async (id: string) => {
+    setEnviandoId(id);
+    try {
+      await correosApi.enviarPrueba(id);
+      toast.success("Correo de prueba enviado exitosamente");
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al enviar el correo de prueba");
+    } finally {
+      setEnviandoId(null);
     }
   };
 
@@ -356,15 +369,27 @@ export default function CorreosPage() {
                       </button>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteCorreo(item.id, item.email)}
-                        className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        title="Eliminar destinatario"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEnviarPrueba(item.id)}
+                          disabled={enviandoId === item.id}
+                          className="h-8 w-8 text-gray-400 hover:text-calipso-600 hover:bg-calipso-50 transition-colors"
+                          title="Enviar correo de prueba"
+                        >
+                          {enviandoId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteCorreo(item.id, item.email)}
+                          className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Eliminar destinatario"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

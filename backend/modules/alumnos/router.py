@@ -5,6 +5,7 @@ from uuid import UUID
 import io
 import logging
 import openpyxl
+from openpyxl.styles import Font, PatternFill
 from fastapi.responses import StreamingResponse
 from fastapi import UploadFile, File
 from core.database import get_db
@@ -34,6 +35,41 @@ def download_template():
         'Content-Disposition': 'attachment; filename="planilla_alumnos.xlsx"'
     }
     return StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers=headers)
+
+@router.get("/export")
+def export_alumnos(db: Session = Depends(get_db), tenant: TenantContext = Depends(get_current_tenant)):
+    if tenant.rol == "monitor":
+        raise HTTPException(status_code=403, detail="Sin permiso para exportar alumnos")
+
+    alumnos = crud.get_alumnos(db, tenant.colegio_id, skip=0, limit=10000, usuario_id=tenant.usuario_id, rol=tenant.rol)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Alumnos"
+    ws.append(["RUT", "Nombre Completo", "Curso", "Teléfono", "Estado"])
+    for a in alumnos:
+        ws.append([a.rut, a.nombre_completo, a.curso, a.telefono or "", "Activo" if a.is_active else "Inactivo"])
+
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="008080", end_color="008080", fill_type="solid")
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = openpyxl.utils.get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 15)
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={'Content-Disposition': 'attachment; filename="alumnos.xlsx"'},
+    )
+
 
 @router.post("/bulk-upload")
 def bulk_upload_alumnos(

@@ -27,7 +27,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2, Loader2, Download, FileUp, Users, UserMinus, UserCheck, Database, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2, Download, FileUp, FileSpreadsheet, Users, UserMinus, UserCheck, Database, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import {
   Select,
@@ -166,6 +166,24 @@ export default function AlumnosPage() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      const blob = await alumnosApi.exportAlumnos();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "alumnos.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("Excel generado correctamente");
+    } catch (error) {
+      console.error("Error exporting alumnos:", error);
+      toast.error("Error al exportar los alumnos");
+    }
+  };
+
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -271,7 +289,12 @@ export default function AlumnosPage() {
               <Download className="h-4 w-4 mr-2" />
               Descargar Planilla
             </Button>
-            
+
+            <Button variant="outline" onClick={handleExport} disabled={saving} className="w-full sm:w-auto">
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Exportar Excel
+            </Button>
+
             <input
               type="file"
               id="bulk-upload"

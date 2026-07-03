@@ -23,7 +23,13 @@
       "Bash(grep -E \"\\\\.env$\")",
       "Bash(venv/Scripts/python.exe -m pytest tests/ -q)",
       "Bash(venv/Scripts/python.exe -m pytest tests/test_tenant_isolation.py::test_listado_alumnos_solo_devuelve_colegio_propio -x)",
-      "PowerShell(Set-Location *)"
+      "PowerShell(Set-Location *)",
+      "Bash(xargs ls -la)",
+      "Bash(python -c ' *)",
+      "Bash(iconv -f cp1252 -t utf-8)",
+      "Bash(wmic process *)",
+      "Bash(powershell -Command \"\\(Get-CimInstance Win32_Process -Filter 'ProcessId=47300'\\).CommandLine\")",
+      "Bash(xargs -I{} echo {})"
     ]
   }
 }

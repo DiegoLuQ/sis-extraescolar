@@ -9,7 +9,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from fastapi.responses import StreamingResponse
 from core.database import get_db
 from modules.auth.dependencies import get_current_tenant, TenantContext
-from modules.usuarios.schemas import UsuarioCreate, UsuarioUpdate, UsuarioResponse, UsuarioBulkDelete
+from modules.usuarios.schemas import UsuarioCreate, UsuarioUpdate, UsuarioResponse, UsuarioBulkDelete, CambiarPasswordRequest
 from modules.usuarios import crud
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,18 @@ def list_usuarios(
         # El admin ve todos los usuarios (activos e inactivos)
         include_inactive=(tenant.rol == "admin")
     )
+
+
+@router.patch("/me/password")
+def cambiar_mi_password(
+    data: CambiarPasswordRequest,
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    db_usuario = crud.cambiar_mi_password(db, tenant.usuario_id, data.password)
+    if not db_usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return {"detail": "Contraseña actualizada exitosamente"}
 
 
 @router.post("/impacto-eliminacion")

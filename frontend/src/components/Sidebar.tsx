@@ -19,12 +19,27 @@ import {
   BarChart3,
   Mail,
   Clock,
+  CalendarClock,
+  KeyRound,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import { usePermisos } from "@/hooks/usePermisos";
-import { authApi } from "@/lib/api";
+import { authApi, usuariosApi } from "@/lib/api";
 import { useEffect, useState } from "react";
 import type { Colegio } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const navigationAdmin = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, modulo: "dashboard" },
@@ -38,6 +53,7 @@ const navigationAdmin = [
   { name: "Alertas", href: "/dashboard/alertas", icon: AlertTriangle, modulo: "alertas" },
   { name: "Reportes", href: "/dashboard/reportes", icon: BarChart3, modulo: "reportes" },
   { name: "Correos", href: "/dashboard/correos", icon: Mail, modulo: "correos" },
+  { name: "Reportes Programados", href: "/dashboard/reportes-programados", icon: CalendarClock, modulo: "reportes_programados" },
   { name: "Roles y Permisos", href: "/dashboard/roles", icon: Settings, modulo: "roles" },
 ];
 
@@ -67,6 +83,10 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const { permisos, loading } = usePermisos();
   const [colegios, setColegios] = useState<Colegio[]>([]);
   const [loadingColegios, setLoadingColegios] = useState(true);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     const fetchColegios = async () => {
@@ -101,6 +121,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const puedeVer = (modulo: string) => {
     if (modulo === "dashboard") return true;
     if (modulo === "correos") return user?.rol === "admin";
+    if (modulo === "reportes_programados") return user?.rol === "admin";
     if (modulo === "horario") return user?.rol === "admin" || user?.rol === "coordinador";
     if (loading || !permisos) return true;
     const permiso = permisos.find(p => p.modulo === modulo);
@@ -108,6 +129,34 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   };
 
   const filteredNavigation = navigation.filter(item => puedeVer(item.modulo));
+
+  const closePasswordDialog = () => {
+    setIsPasswordDialogOpen(false);
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      toast.error("La contraseña debe tener al menos 6 caracteres");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Las contraseñas no coinciden");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await usuariosApi.cambiarMiPassword(newPassword);
+      toast.success("Contraseña actualizada exitosamente");
+      closePasswordDialog();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al cambiar la contraseña");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   const activeSchoolId = typeof window !== "undefined" ? localStorage.getItem("colegio_id") : null;
   const activeColegio = colegios.find((c) => c.id === activeSchoolId);
@@ -202,6 +251,13 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
         </div>
         <button
+          onClick={() => setIsPasswordDialogOpen(true)}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-calipso-100 hover:bg-calipso-800 hover:text-white transition-colors"
+        >
+          <KeyRound className="h-5 w-5" />
+          Cambiar Contraseña
+        </button>
+        <button
           onClick={logout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-calipso-100 hover:bg-calipso-800 hover:text-white transition-colors"
         >
@@ -209,6 +265,72 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           Cerrar sesión
         </button>
       </div>
+
+      <Dialog
+        open={isPasswordDialogOpen}
+        onOpenChange={(open) => {
+          if (open) setIsPasswordDialogOpen(true);
+          else closePasswordDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-calipso-500" />
+              Cambiar Contraseña
+            </DialogTitle>
+            <DialogDescription>
+              Define tu nueva contraseña de acceso al sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password" className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                Nueva Contraseña
+              </Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                className="focus-visible:ring-calipso-500"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password" className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+                Confirmar Contraseña
+              </Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repite la nueva contraseña"
+                className="focus-visible:ring-calipso-500"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleChangePassword();
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closePasswordDialog} disabled={changingPassword}>
+              Cancelar
+            </Button>
+            <Button onClick={handleChangePassword} className="bg-calipso-500 hover:bg-calipso-600" disabled={changingPassword}>
+              {changingPassword ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                "Guardar"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

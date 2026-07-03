@@ -4,8 +4,9 @@ from typing import List
 from uuid import UUID
 from core.database import get_db
 from modules.auth.dependencies import get_current_tenant, TenantContext
+from modules.colegios.models import Colegio
 from modules.correos.schemas import CorreoReporteCreate, CorreoReporteUpdate, CorreoReporteResponse
-from modules.correos import crud
+from modules.correos import crud, services
 
 router = APIRouter(prefix="/api/correos", tags=["correos"])
 
@@ -50,3 +51,19 @@ def delete_correo(correo_id: UUID, db: Session = Depends(get_db), tenant: Tenant
     success = crud.delete_correo(db, correo_id, tenant.colegio_id)
     if not success:
         raise HTTPException(status_code=404, detail="Correo no encontrado")
+
+
+@router.post("/{correo_id}/enviar-prueba")
+def enviar_correo_prueba(correo_id: UUID, db: Session = Depends(get_db), tenant: TenantContext = Depends(get_current_tenant)):
+    verify_admin(tenant)
+    db_correo = crud.get_correo_by_id(db, correo_id, tenant.colegio_id)
+    if not db_correo:
+        raise HTTPException(status_code=404, detail="Correo no encontrado")
+
+    colegio = db.query(Colegio).filter(Colegio.id == str(db_correo.colegio_id)).first()
+    nombre_colegio = colegio.nombre_colegio if colegio else "Establecimiento"
+
+    resultado = services.enviar_correo_prueba(nombre_colegio, db_correo.email)
+    if not resultado.get("sent"):
+        raise HTTPException(status_code=422, detail=f"No se pudo enviar el correo de prueba: {resultado.get('status')}")
+    return resultado

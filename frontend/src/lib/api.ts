@@ -110,6 +110,9 @@ export const usuariosApi = {
   delete: async (id: string): Promise<void> => {
     await api.delete(`/api/usuarios/${id}`);
   },
+  cambiarMiPassword: async (password: string): Promise<void> => {
+    await api.patch('/api/usuarios/me/password', { password });
+  },
   downloadTemplate: async (): Promise<Blob> => {
     const response = await api.get('/api/usuarios/template', { responseType: 'blob' });
     return response.data;
@@ -171,6 +174,12 @@ export const alumnosApi = {
   },
   downloadTemplate: async (): Promise<Blob> => {
     const response = await api.get('/api/alumnos/template', {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+  exportAlumnos: async (): Promise<Blob> => {
+    const response = await api.get('/api/alumnos/export', {
       responseType: 'blob',
     });
     return response.data;
@@ -460,6 +469,60 @@ export const correosApi = {
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/api/correos/${id}`);
+  },
+  enviarPrueba: async (id: string): Promise<{ status: string; sent: boolean }> => {
+    const response = await api.post(`/api/correos/${id}/enviar-prueba`);
+    return response.data;
+  },
+};
+
+export type FrecuenciaReporte = "diario" | "semanal" | "mensual";
+
+export interface ReporteProgramado {
+  id: string;
+  colegio_id: string;
+  nombre: string | null;
+  frecuencia: FrecuenciaReporte;
+  destinatarios: string[];
+  activo: boolean;
+  ultima_ejecucion: string | null;
+  ultimo_estado: string | null;
+  creado_at: string | null;
+}
+
+export const reportesProgramadosApi = {
+  getAll: async (): Promise<ReporteProgramado[]> => {
+    const response = await api.get<ReporteProgramado[]>('/api/reportes-programados');
+    return response.data;
+  },
+  getById: async (id: string): Promise<ReporteProgramado> => {
+    const response = await api.get<ReporteProgramado>(`/api/reportes-programados/${id}`);
+    return response.data;
+  },
+  preview: async (colegioId: string, frecuencia: FrecuenciaReporte): Promise<{ html: string; etiqueta_periodo: string }> => {
+    const response = await api.get('/api/reportes-programados/preview', {
+      params: { colegio_id: colegioId, frecuencia },
+    });
+    return response.data;
+  },
+  create: async (data: { nombre?: string; frecuencia: FrecuenciaReporte; destinatarios: string[]; colegio_id?: string }): Promise<ReporteProgramado> => {
+    const response = await api.post<ReporteProgramado>('/api/reportes-programados', data);
+    return response.data;
+  },
+  update: async (id: string, data: { nombre?: string; frecuencia?: FrecuenciaReporte; destinatarios?: string[]; colegio_id?: string }): Promise<ReporteProgramado> => {
+    const response = await api.put<ReporteProgramado>(`/api/reportes-programados/${id}`, data);
+    return response.data;
+  },
+  toggle: async (id: string, activo: boolean): Promise<ReporteProgramado> => {
+    const response = await api.patch<ReporteProgramado>(`/api/reportes-programados/${id}/toggle`, { activo });
+    return response.data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/api/reportes-programados/${id}`);
+  },
+  enviarAhora: async (id: string): Promise<{ status: string; sent: boolean; recipients?: number }> => {
+    const response = await api.post(`/api/reportes-programados/${id}/enviar`);
+    return response.data;
   },
 };
 

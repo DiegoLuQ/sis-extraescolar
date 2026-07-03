@@ -1,4 +1,5 @@
 import logging
+import re
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 from core.config import settings
@@ -50,7 +51,29 @@ def get_letter(text: str) -> str:
     return ""
 
 
-def normalize_curso(curso_str: str) -> str:
+# Códigos MINEDUC de tipo_ensenanza que corresponden a Enseñanza Media.
+# 310: Enseñanza Media Humanístico-Científica | 410: Educación Media T/P Comercial
+TIPOS_ENSENANZA_MEDIA = {310, 410}
+
+
+def is_media_course(curso_str: str, tipo_ensenanza=None) -> bool:
+    """
+    Determina si un curso es de Enseñanza Media. Prioriza el código
+    tipo_ensenanza (autoritativo, evita ambigüedad entre "3ro A" de
+    básica y de media); si no viene, usa el nombre del curso como fallback.
+
+    tipo_ensenanza viene como "310:Enseñanza Media Humanístico Científica",
+    no como código numérico puro, por eso se extrae el prefijo numérico.
+    """
+    if tipo_ensenanza is not None:
+        match = re.match(r"\s*(\d+)", str(tipo_ensenanza))
+        if match and int(match.group(1)) in TIPOS_ENSENANZA_MEDIA:
+            return True
+    t_lower = curso_str.lower()
+    return "media" in t_lower or "ºm" in t_lower or "°m" in t_lower
+
+
+def normalize_curso(curso_str: str, tipo_ensenanza=None) -> str:
     if not curso_str:
         return ""
 
@@ -69,7 +92,7 @@ def normalize_curso(curso_str: str) -> str:
         letter = get_letter(t_clean) or "A"
         return f"Kº{letter}"
 
-    is_media = "media" in curso_str.lower() or "ºm" in t_lower or "°m" in t_lower
+    is_media = is_media_course(curso_str, tipo_ensenanza)
 
     grade = get_grade_number(t_clean)
     letter = get_letter(t_clean)
@@ -90,34 +113,55 @@ def fetch_external_students(db_url: str) -> list:
     """
     engine = create_engine(db_url, pool_pre_ping=True)
     students = []
+
+    # Variantes de consulta en orden de preferencia: primero con
+    # tipo_ensenanza (necesario para distinguir básica de media en cursos
+    # ambiguos como "3ro A"), con fallback si la columna no existe.
+    query_variants = [
+        """
+            SELECT a.rut, a.nombre, c.nombre AS curso_nombre, a.telefono_contacto, c.tipo_ensenanza
+            FROM alumnos a
+            JOIN cursos c ON a.curso_id = c.id
+        """,
+        """
+            SELECT a.rut, a.nombre, c.nombre AS curso_nombre, a.telefono_contacto, NULL AS tipo_ensenanza
+            FROM alumnos a
+            JOIN cursos c ON a.curso_id = c.id
+        """,
+        """
+            SELECT a.rut, a.nombre, c.curso AS curso_nombre, a.telefono_contacto, c.tipo_ensenanza
+            FROM alumnos a
+            JOIN cursos c ON a.curso_id = c.id
+        """,
+        """
+            SELECT a.rut, a.nombre, c.curso AS curso_nombre, a.telefono_contacto, NULL AS tipo_ensenanza
+            FROM alumnos a
+            JOIN cursos c ON a.curso_id = c.id
+        """,
+    ]
+
     with engine.connect() as conn:
-        try:
-            # Intentamos con c.nombre como identificador del curso
-            query = text("""
-                SELECT a.rut, a.nombre, c.nombre AS curso_nombre, a.telefono_contacto
-                FROM alumnos a
-                JOIN cursos c ON a.curso_id = c.id
-            """)
-            result = conn.execute(query)
-        except Exception as e:
-            logger.warning(f"Fallo consulta con c.nombre en {db_url}, intentando fallback con c.curso: {e}")
-            query = text("""
-                SELECT a.rut, a.nombre, c.curso AS curso_nombre, a.telefono_contacto
-                FROM alumnos a
-                JOIN cursos c ON a.curso_id = c.id
-            """)
-            result = conn.execute(query)
+        result = None
+        for i, sql in enumerate(query_variants):
+            try:
+                result = conn.execute(text(sql))
+                break
+            except Exception as e:
+                logger.warning(f"Fallo variante de consulta #{i + 1} en {db_url}: {e}")
+        if result is None:
+            raise RuntimeError(f"No se pudo ejecutar ninguna variante de consulta contra {db_url}")
 
         for row in result:
             rut = row[0]
             nombre = row[1]
             curso_raw = row[2]
+            tipo_ensenanza = row[4] if len(row) > 4 else None
             if not rut:
                 continue
             students.append({
                 "rut": str(rut).strip(),
                 "nombre_completo": str(nombre).strip() if nombre else "",
-                "curso": normalize_curso(str(curso_raw)) if curso_raw else "",
+                "curso": normalize_curso(str(curso_raw), tipo_ensenanza) if curso_raw else "",
                 "telefono": str(row[3]).strip() if len(row) > 3 and row[3] is not None else None,
             })
     return students

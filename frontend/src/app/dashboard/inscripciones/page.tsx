@@ -26,9 +26,10 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Loader2, Users, Calendar, Clock, BookOpen, ChevronRight } from "lucide-react";
+import { Plus, Search, Loader2, Users, Calendar, Clock, BookOpen, ChevronRight, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
+import { confirmDialog, alertDialog } from "@/components/ui/confirm-dialog";
 
 interface TallerResumen {
   id: string;
@@ -39,6 +40,7 @@ interface TallerResumen {
   hora_fin: string;
   cupos_maximos: number;
   inscritos_count: number;
+  sesiones_count: number;
 }
 
 export default function InscripcionesPage() {
@@ -105,6 +107,45 @@ export default function InscripcionesPage() {
       toast.error(error.response?.data?.detail || "Error al inscribir");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleVaciar = async (e: React.MouseEvent, taller: TallerResumen) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (taller.sesiones_count > 0) {
+      await alertDialog({
+        title: "No se puede vaciar",
+        description: `El taller "${taller.nombre_taller}" tiene ${taller.sesiones_count} sesión(es) creada(s). Elimina primero las sesiones para poder vaciar las inscripciones.`,
+        confirmText: "Entendido",
+      });
+      return;
+    }
+
+    if (taller.inscritos_count === 0) {
+      await alertDialog({
+        title: "Sin inscripciones",
+        description: `El taller "${taller.nombre_taller}" no tiene inscripciones para vaciar.`,
+        confirmText: "Entendido",
+      });
+      return;
+    }
+
+    const ok = await confirmDialog({
+      title: "Vaciar inscripciones",
+      description: `¿Eliminar las ${taller.inscritos_count} inscripciones de "${taller.nombre_taller}"? Esta acción no se puede deshacer.`,
+      confirmText: "Vaciar",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    try {
+      const { data } = await inscripcionesApi.vaciarTaller(taller.id);
+      await fetchData();
+      toast.success(`Inscripciones vaciadas (${data.deleted} eliminadas)`);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al vaciar las inscripciones");
     }
   };
 
@@ -343,8 +384,19 @@ export default function InscripcionesPage() {
               </CardContent>
               {user?.rol !== 'monitor' && (
                 <CardFooter className="pt-3 border-t bg-gray-50/50 flex justify-between items-center">
-                  <span className="text-sm font-medium text-calipso-600">Ver alumnos y asistencia</span>
-                  <ChevronRight className="h-4 w-4 text-calipso-600" />
+                  <button
+                    type="button"
+                    onClick={(e) => handleVaciar(e, taller)}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-50 rounded-md px-2 py-1 transition-colors"
+                    title="Vaciar inscripciones"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Vaciar
+                  </button>
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-calipso-600">
+                    Ver alumnos
+                    <ChevronRight className="h-4 w-4" />
+                  </span>
                 </CardFooter>
               )}
             </Card>

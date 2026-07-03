@@ -105,7 +105,8 @@ def get_talleres_resumen(db: Session, colegio_id: Optional[str] = None, usuario_
             Inscripcion.taller_id == t.id,
             Inscripcion.estado == EstadoInscripcionEnum.inscrito
         ).count()
-        
+        sesiones_count = db.query(Sesion).filter(Sesion.taller_id == t.id).count()
+
         resumen.append({
             "id": t.id,
             "nombre_taller": t.nombre_taller,
@@ -114,7 +115,8 @@ def get_talleres_resumen(db: Session, colegio_id: Optional[str] = None, usuario_
             "hora_inicio": t.hora_inicio,
             "hora_fin": t.hora_fin,
             "cupos_maximos": t.cupos_maximos,
-            "inscritos_count": inscritos_count
+            "inscritos_count": inscritos_count,
+            "sesiones_count": sesiones_count
         })
         
     return resumen
@@ -258,4 +260,29 @@ def delete_inscripcion(db: Session, inscripcion_id: UUID, escuela_id: str):
     db.delete(db_inscripcion)
     db.commit()
     return True
+
+
+def vaciar_inscripciones(db: Session, taller_id: str, colegio_id: str) -> int:
+    """
+    Elimina todas las inscripciones de un taller. Solo se permite si el taller
+    no tiene sesiones creadas; en caso contrario se lanza ValueError, porque las
+    sesiones (y sus asistencias) dependen de que la matrícula se mantenga.
+    Retorna la cantidad de inscripciones eliminadas.
+    """
+    taller = db.query(Taller).filter(Taller.id == taller_id, Taller.colegio_id == colegio_id).first()
+    if not taller:
+        raise ValueError("Taller no encontrado")
+
+    sesiones_count = db.query(Sesion).filter(Sesion.taller_id == taller_id).count()
+    if sesiones_count > 0:
+        raise ValueError(
+            f"El taller tiene {sesiones_count} sesión(es). Elimina las sesiones antes de vaciar las inscripciones."
+        )
+
+    eliminadas = db.query(Inscripcion).filter(
+        Inscripcion.taller_id == taller_id,
+        Inscripcion.colegio_id == colegio_id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return eliminadas
 

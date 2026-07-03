@@ -34,6 +34,7 @@ class TallerResumenResponse(BaseModel):
     hora_fin: Optional[str] = None
     cupos_maximos: int
     inscritos_count: int
+    sesiones_count: int = 0
 
     class Config:
         from_attributes = True

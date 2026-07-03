@@ -119,6 +119,23 @@ def update_inscripcion(inscripcion_id: UUID, inscripcion: InscripcionUpdate, db:
         raise HTTPException(status_code=404, detail="Inscripción no encontrada")
     return db_inscripcion
 
+@router.delete("/taller/{taller_id}/vaciar")
+def vaciar_inscripciones_taller(
+    taller_id: str,
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    if tenant.rol == "monitor":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para vaciar inscripciones")
+    try:
+        eliminadas = crud.vaciar_inscripciones(db, taller_id, str(tenant.colegio_id))
+    except ValueError as e:
+        detail = str(e)
+        code = status.HTTP_404_NOT_FOUND if detail == "Taller no encontrado" else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail=detail)
+    return {"deleted": eliminadas}
+
+
 @router.delete("/{inscripcion_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_inscripcion(
     inscripcion_id: UUID,

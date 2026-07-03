@@ -263,6 +263,7 @@ export const inscripcionesApi = {
     await api.delete(`/api/inscripciones/${id}`);
   },
   getResumen: () => api.get<any[]>('/api/inscripciones/resumen'),
+  vaciarTaller: (tallerId: string) => api.delete<{ deleted: number }>(`/api/inscripciones/taller/${tallerId}/vaciar`),
   getStatsByTaller: (tallerId: string) => api.get<any[]>(`/api/inscripciones/taller/${tallerId}/stats`),
   exportByTaller: (tallerId: string) => api.get(`/api/inscripciones/taller/${tallerId}/export`, { responseType: 'blob' }),
   bulkUpload: (tallerId: string, file: File) => {

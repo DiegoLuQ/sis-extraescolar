@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from core.database import get_db
 from modules.auth.dependencies import get_current_tenant, TenantContext
@@ -16,6 +16,11 @@ from modules.estadisticas import crud
 router = APIRouter(prefix="/api/estadisticas", tags=["estadisticas"])
 
 
+@router.get("/resumen")
+def resumen_dashboard(db: Session = Depends(get_db), tenant: TenantContext = Depends(get_current_tenant)):
+    return crud.get_resumen_dashboard(db, tenant.colegio_id, usuario_id=tenant.usuario_id, rol=tenant.rol)
+
+
 @router.get("/ocupacion", response_model=List[TallerOcupacion])
 def ocupacion_talleres(db: Session = Depends(get_db), tenant: TenantContext = Depends(get_current_tenant)):
     return crud.get_ocupacion_talleres(db, tenant.colegio_id, usuario_id=tenant.usuario_id, rol=tenant.rol)
@@ -27,8 +32,23 @@ def ausentismo_talleres(db: Session = Depends(get_db), tenant: TenantContext = D
 
 
 @router.get("/alertas-inasistencias", response_model=List[AlertaInasistencia])
-def alertas_inasistencias(db: Session = Depends(get_db), tenant: TenantContext = Depends(get_current_tenant)):
-    return crud.get_alertas_inasistencias(db, tenant.colegio_id, usuario_id=tenant.usuario_id, rol=tenant.rol)
+def alertas_inasistencias(
+    min_ausencias: int = 3,
+    colegio_id: Optional[str] = None,
+    taller_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    target_colegio = colegio_id if (tenant.rol == "admin" and colegio_id) else tenant.colegio_id
+    return crud.get_alertas_inasistencias(
+        db,
+        escuela_id=target_colegio,
+        usuario_id=tenant.usuario_id,
+        rol=tenant.rol,
+        min_ausencias=min_ausencias,
+        taller_id=taller_id
+    )
+
 
 
 @router.get("/detalle-asistencia/{alumno_id}", response_model=AlumnoAsistenciaDetalle)

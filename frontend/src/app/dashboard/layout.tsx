@@ -64,7 +64,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-[#f0f7ff] overflow-hidden">
+    <div className="flex h-screen bg-[#f0f7ff] overflow-hidden" suppressHydrationWarning>
       {/* Sidebar Desktop */}
       <div className="hidden lg:flex lg:flex-shrink-0">
         <Sidebar />

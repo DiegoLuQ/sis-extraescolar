@@ -69,9 +69,9 @@ def get_monthly_attendance_report(db: Session, colegio_id: str, mes: int, anio: 
         taller_asistencias = {}
         total_taller = 0
         for day in active_days:
-            sesion_hoy = next((s for s in sesiones if str(s.taller_id) == str(t.id) and s.fecha_sesion.strftime("%Y-%m-%d") == day), None)
-            if sesion_hoy:
-                count = asistencias_map.get(str(sesion_hoy.id), 0)
+            sesiones_hoy = [s for s in sesiones if str(s.taller_id) == str(t.id) and s.fecha_sesion.strftime("%Y-%m-%d") == day]
+            if sesiones_hoy:
+                count = sum(asistencias_map.get(str(s.id), 0) for s in sesiones_hoy)
                 taller_asistencias[day] = count
                 total_taller += count
             else:
@@ -367,27 +367,40 @@ def get_weekly_summary_report(db: Session, colegio_id: str, semanas_atras: int =
     rango_sel_inicio = inicio_semana_seleccionada - datetime.timedelta(days=1)
     rango_ant_inicio = inicio_semana_anterior - datetime.timedelta(days=1)
     
-    # Sesiones en las semanas respectivas (incluyendo el día anterior)
+    # Obtener talleres activos del colegio
+    talleres = db.query(Taller).filter(Taller.colegio_id == colegio_id, Taller.is_active == True).all()
+    taller_ids = [t.id for t in talleres]
+
+    if not taller_ids:
+        return {
+            "semana_actual": [],
+            "comparativa_dia_anterior": None,
+            "total_hoy": 0,
+            "total_semana_actual": 0,
+            "total_semana_anterior": 0,
+            "comparativa_totales_porcentaje": None
+        }
+
+    # Sesiones en las semanas respectivas para talleres activos
     sesiones_seleccionadas = db.query(Sesion).filter(
         Sesion.colegio_id == colegio_id,
+        Sesion.taller_id.in_(taller_ids),
         Sesion.fecha_sesion >= rango_sel_inicio,
         Sesion.fecha_sesion <= fin_semana_seleccionada
     ).all()
-    
+
     sesiones_anteriores = db.query(Sesion).filter(
         Sesion.colegio_id == colegio_id,
+        Sesion.taller_id.in_(taller_ids),
         Sesion.fecha_sesion >= rango_ant_inicio,
         Sesion.fecha_sesion <= fin_semana_anterior
     ).all()
-    
+
     sesiones_hoy = db.query(Sesion).filter(
         Sesion.colegio_id == colegio_id,
+        Sesion.taller_id.in_(taller_ids),
         Sesion.fecha_sesion == hoy
     ).all()
-    
-    # Obtener matrícula por taller
-    talleres = db.query(Taller).filter(Taller.colegio_id == colegio_id).all()
-    taller_ids = [t.id for t in talleres]
     enrollment_map = {}
     if taller_ids:
         enrollment_query = db.query(Inscripcion.taller_id, func.count(Inscripcion.id).label("count")).filter(

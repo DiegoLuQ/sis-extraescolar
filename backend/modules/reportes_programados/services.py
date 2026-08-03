@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from core.smtp_utils import obtener_credenciales_smtp
+from core.smtp_utils import obtener_credenciales_smtp, obtener_destinatarios_to_y_cc
 from modules.colegios.models import Colegio
 from modules.sesiones.models import Sesion
 from modules.asistencias.models import Asistencia
@@ -190,6 +190,8 @@ def enviar_reporte(db: Session, reporte: ReporteProgramado, fecha_referencia: da
         crud.marcar_ejecucion(db, reporte.id, fecha_referencia.isoformat(), resultado["status"])
         return resultado
 
+    to_email, cc_emails = obtener_destinatarios_to_y_cc(destinatarios, nombre_colegio)
+
     fecha_inicio, fecha_fin, etiqueta_periodo = calcular_periodo(reporte.frecuencia, fecha_referencia)
     totales = obtener_totales_periodo(db, reporte.colegio_id, fecha_inicio, fecha_fin)
     html_content = construir_html_reporte(nombre_colegio, etiqueta_periodo, totales)
@@ -197,7 +199,9 @@ def enviar_reporte(db: Session, reporte: ReporteProgramado, fecha_referencia: da
     try:
         msg = MIMEMultipart()
         msg["From"] = f"Reportes Extraescolar <{sender_email}>"
-        msg["To"] = ", ".join(destinatarios)
+        msg["To"] = to_email
+        if cc_emails:
+            msg["Cc"] = ", ".join(cc_emails)
         msg["Subject"] = f"Reporte de Asistencia Extraescolar - {etiqueta_periodo}"
         msg.attach(MIMEText(html_content, "html"))
 

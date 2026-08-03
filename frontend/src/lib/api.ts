@@ -407,6 +407,10 @@ export const rolesApi = {
 };
 
 export const estadisticasApi = {
+  resumen: async (): Promise<{ usuarios_count: number; alumnos_count: number; talleres_count: number }> => {
+    const response = await api.get<{ usuarios_count: number; alumnos_count: number; talleres_count: number }>('/api/estadisticas/resumen');
+    return response.data;
+  },
   ocupacion: async (): Promise<TallerOcupacion[]> => {
     const response = await api.get<TallerOcupacion[]>('/api/estadisticas/ocupacion');
     return response.data;
@@ -415,8 +419,8 @@ export const estadisticasApi = {
     const response = await api.get<AusentismoTaller[]>('/api/estadisticas/ausentismo');
     return response.data;
   },
-  alertasInasistencias: async (): Promise<AlertaInasistencia[]> => {
-    const response = await api.get<AlertaInasistencia[]>('/api/estadisticas/alertas-inasistencias');
+  alertasInasistencias: async (params?: { min_ausencias?: number; colegio_id?: string; taller_id?: string }): Promise<AlertaInasistencia[]> => {
+    const response = await api.get<AlertaInasistencia[]>('/api/estadisticas/alertas-inasistencias', { params });
     return response.data;
   },
   detalleAsistencia: async (alumnoId: string): Promise<AlumnoAsistenciaDetalle> => {
@@ -527,4 +531,71 @@ export const reportesProgramadosApi = {
   },
 };
 
+export interface BuscadorHorario {
+  dia: string;
+  hora_inicio: string | null;
+  hora_fin: string | null;
+}
+
+export interface BuscadorSesion {
+  sesion_id: string;
+  fecha: string;
+  tematica: string;
+  estado: string;
+  observaciones: string | null;
+  bloqueada: boolean;
+}
+
+export interface BuscadorTaller {
+  taller_id: string;
+  nombre_taller: string;
+  dias_resumen: string;
+  horarios: BuscadorHorario[];
+  monitor: {
+    nombre: string;
+    email: string;
+  };
+  es_hoy: boolean;
+  estadisticas: {
+    total_sesiones: number;
+    presentes: number;
+    ausentes: number;
+    atrasos: number;
+    justificados: number;
+    porcentaje_asistencia: number;
+  };
+  sesiones: BuscadorSesion[];
+}
+
+export interface BuscadorAlumnoResult {
+  alumno_id: string;
+  rut: string;
+  nombre_completo: string;
+  curso: string;
+  telefono: string | null;
+  colegio_id: string;
+  nombre_colegio: string;
+  talleres: BuscadorTaller[];
+}
+
+export interface BuscadorResponse {
+  query: string;
+  regex_valid: boolean;
+  dia_actual: string;
+  total_resultados: number;
+  results: BuscadorAlumnoResult[];
+}
+
+export const buscadorApi = {
+  validarPin: async (pin: string): Promise<{ valid: boolean; message: string }> => {
+    const response = await api.post<{ valid: boolean; message: string }>('/api/buscar-alumnos/validar-pin', { pin });
+    return response.data;
+  },
+  buscar: async (pin: string, query: string): Promise<BuscadorResponse> => {
+    const response = await api.post<BuscadorResponse>('/api/buscar-alumnos/buscar', { pin, query });
+    return response.data;
+  },
+};
+
 export default api;
+

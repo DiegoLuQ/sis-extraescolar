@@ -50,6 +50,7 @@ const navigationAdmin = [
   { name: "Inscripciones", href: "/dashboard/inscripciones", icon: ClipboardList, modulo: "inscripciones" },
   { name: "Sesiones", href: "/dashboard/sesiones", icon: Calendar, modulo: "sesiones" },
   { name: "Horario", href: "/dashboard/horario", icon: Clock, modulo: "horario" },
+  { name: "Alta Inasistencia", href: "/dashboard/alta-inasistencia", icon: AlertTriangle, modulo: "alertas" },
   { name: "Alertas", href: "/dashboard/alertas", icon: AlertTriangle, modulo: "alertas" },
   { name: "Reportes", href: "/dashboard/reportes", icon: BarChart3, modulo: "reportes" },
   { name: "Correos", href: "/dashboard/correos", icon: Mail, modulo: "correos" },
@@ -65,6 +66,7 @@ const navigationCoordinador = [
   { name: "Inscripciones", href: "/dashboard/inscripciones", icon: ClipboardList, modulo: "inscripciones" },
   { name: "Sesiones", href: "/dashboard/sesiones", icon: Calendar, modulo: "sesiones" },
   { name: "Horario", href: "/dashboard/horario", icon: Clock, modulo: "horario" },
+  { name: "Alta Inasistencia", href: "/dashboard/alta-inasistencia", icon: AlertTriangle, modulo: "alertas" },
   { name: "Alertas", href: "/dashboard/alertas", icon: AlertTriangle, modulo: "alertas" },
   { name: "Reportes", href: "/dashboard/reportes", icon: BarChart3, modulo: "reportes" },
 ];

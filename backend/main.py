@@ -17,6 +17,7 @@ from modules.roles.router import router as roles_router
 from modules.reportes.router import router as reportes_router
 from modules.correos.router import router as correos_router
 from modules.reportes_programados.router import router as reportes_programados_router
+from modules.buscador.router import router as buscador_router
 from core.limiter import limiter
 from core.scheduler import start_scheduler, stop_scheduler
 
@@ -50,6 +51,8 @@ app.include_router(roles_router)
 app.include_router(reportes_router)
 app.include_router(correos_router)
 app.include_router(reportes_programados_router)
+app.include_router(buscador_router)
+
 
 
 @app.on_event("startup")

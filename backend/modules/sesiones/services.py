@@ -101,8 +101,11 @@ def enviar_reporte_inconsistencias_smtp(db: Session, sesion_id: UUID, colegio_id
         print("Faltan credenciales SMTP en variables de entorno")
         return {"status": "missing_smtp_credentials", "sent": False}
         
-    to_emails = [d.email for d in destinatarios]
-    
+    from core.smtp_utils import obtener_destinatarios_to_y_cc
+
+    destinatarios_emails = [d.email for d in destinatarios]
+    to_email, cc_emails = obtener_destinatarios_to_y_cc(destinatarios_emails, nombre_colegio)
+
     filas_html = ""
     for alerta, alu in alertas:
         filas_html += f"""
@@ -113,7 +116,7 @@ def enviar_reporte_inconsistencias_smtp(db: Session, sesion_id: UUID, colegio_id
             <td style="padding: 8px; border-bottom: 1px solid #ddd; color: #d9383a; font-weight: bold;">Presente en Taller / Ausente en Colegio</td>
         </tr>
         """
-        
+
     html_content = f"""
     <html>
     <head></head>
@@ -125,7 +128,7 @@ def enviar_reporte_inconsistencias_smtp(db: Session, sesion_id: UUID, colegio_id
             </div>
             <div style="padding: 20px;">
                 <p>Se ha cerrado la sesion del taller <strong>{nombre_taller}</strong> correspondiente al dia <strong>{sesion.fecha_sesion.strftime('%d/%m/%Y')}</strong> y se han detectado alumnos presentes en el taller que figuran ausentes en la asistencia regular del colegio:</p>
-                
+
                 <table style="width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px;">
                     <thead>
                         <tr style="background-color: #f1f5f9; text-align: left;">
@@ -139,29 +142,31 @@ def enviar_reporte_inconsistencias_smtp(db: Session, sesion_id: UUID, colegio_id
                         {filas_html}
                     </tbody>
                 </table>
-                
+
                 <p style="margin-top: 24px; font-size: 13px; color: #64748b;">Este reporte ha sido generado automaticamente por el Sistema de Asistencia Extraescolar tras la confirmacion de la coordinacion.</p>
             </div>
         </div>
     </body>
     </html>
     """
-    
+
     try:
         msg = MIMEMultipart()
         msg["From"] = f"Sistema Extraescolar <{sender_email}>"
-        msg["To"] = ", ".join(to_emails)
+        msg["To"] = to_email
+        if cc_emails:
+            msg["Cc"] = ", ".join(cc_emails)
         msg["Subject"] = f"Alerta Asistencia: {nombre_taller} - {sesion.fecha_sesion.strftime('%d/%m/%Y')}"
-        
+
         msg.attach(MIMEText(html_content, "html"))
-        
+
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
         server.login(sender_email, sender_password)
         server.send_message(msg)
         server.quit()
-        
-        return {"status": "sent_success", "sent": True, "recipients": len(to_emails)}
+
+        return {"status": "sent_success", "sent": True, "recipients": len(destinatarios_emails)}
     except Exception as e:
         print(f"Error despachando correo SMTP: {e}")
         return {"status": f"error: {str(e)}", "sent": False}
@@ -212,7 +217,8 @@ def enviar_reporte_global_smtp(db: Session, fecha_str: str, colegio_id: str):
     if not sender_email or not sender_password:
         return {"status": "missing_smtp_credentials", "sent": False}
 
-    to_emails = [d.email for d in destinatarios]
+    destinatarios_emails = [d.email for d in destinatarios]
+    to_email, cc_emails = obtener_destinatarios_to_y_cc(destinatarios_emails, nombre_colegio)
 
     try:
         parts = fecha_str.split('-')
@@ -270,7 +276,9 @@ def enviar_reporte_global_smtp(db: Session, fecha_str: str, colegio_id: str):
     try:
         msg = MIMEMultipart()
         msg["From"] = f"Auditoria Extraescolar <{sender_email}>"
-        msg["To"] = ", ".join(to_emails)
+        msg["To"] = to_email
+        if cc_emails:
+            msg["Cc"] = ", ".join(cc_emails)
         msg["Subject"] = f"Reporte Consolidado Asistencia Extraescolar - {fecha_desc}"
         msg.attach(MIMEText(html_content, "html"))
 
@@ -280,7 +288,7 @@ def enviar_reporte_global_smtp(db: Session, fecha_str: str, colegio_id: str):
         server.send_message(msg)
         server.quit()
 
-        return {"status": "sent_success", "sent": True, "recipients": len(to_emails)}
+        return {"status": "sent_success", "sent": True, "recipients": len(destinatarios_emails)}
     except Exception as e:
         print(f"Error despachando digest global SMTP: {e}")
         return {"status": f"error: {str(e)}", "sent": False}
@@ -351,7 +359,8 @@ def enviar_alerta_inconsistencia_individual(db: Session, sesion_id: UUID, alumno
         print(f"No hay destinatarios habilitados con dominio '{dominio_filtro}' para el colegio {colegio_id}")
         return {"status": "no_recipients", "sent": False}
 
-    to_emails = [d.email for d in destinatarios]
+    destinatarios_emails = [d.email for d in destinatarios]
+    to_email, cc_emails = obtener_destinatarios_to_y_cc(destinatarios_emails, nombre_colegio)
 
     # 4. Construir correo HTML
     fecha_str = sesion.fecha_sesion.strftime('%d/%m/%Y')
@@ -416,7 +425,9 @@ def enviar_alerta_inconsistencia_individual(db: Session, sesion_id: UUID, alumno
     try:
         msg = MIMEMultipart()
         msg["From"] = f"Sistema Extraescolar <{sender_email}>"
-        msg["To"] = ", ".join(to_emails)
+        msg["To"] = to_email
+        if cc_emails:
+            msg["Cc"] = ", ".join(cc_emails)
         msg["Subject"] = f"⚠️ Alerta Asistencia: {alumno.nombre_completo} — {nombre_taller} ({fecha_str})"
 
         msg.attach(MIMEText(html_content, "html"))
@@ -427,127 +438,9 @@ def enviar_alerta_inconsistencia_individual(db: Session, sesion_id: UUID, alumno
         server.send_message(msg)
         server.quit()
 
-        print(f"Alerta individual enviada a {len(to_emails)} destinatario(s): {to_emails}")
-        return {"status": "sent_success", "sent": True, "recipients": len(to_emails)}
+        print(f"Alerta individual enviada a Para: {to_email}, Cc: {cc_emails}")
+        return {"status": "sent_success", "sent": True, "recipients": len(destinatarios_emails)}
     except Exception as e:
         print(f"Error despachando alerta individual SMTP: {e}")
-        return {"status": f"error: {str(e)}", "sent": False}
-
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-    import os
-    from modules.asistencias.models import AlertaInconsistencia
-    from modules.alumnos.models import Alumno
-    from modules.correos.crud import get_correos_habilitados_by_colegio
-    from modules.colegios.models import Colegio
-    from modules.talleres.models import Taller
-    from modules.sesiones.models import Sesion
-    
-    destinatarios = get_correos_habilitados_by_colegio(db, colegio_id)
-    if not destinatarios:
-        return {"status": "no_recipients", "sent": False}
-        
-    alertas_data = db.query(
-        AlertaInconsistencia, Alumno, Taller
-    ).join(
-        Alumno, AlertaInconsistencia.alumno_id == Alumno.id
-    ).join(
-        Sesion, AlertaInconsistencia.sesion_id == Sesion.id
-    ).join(
-        Taller, Sesion.taller_id == Taller.id
-    ).filter(
-        AlertaInconsistencia.colegio_id == str(colegio_id),
-        AlertaInconsistencia.fecha == fecha_str
-    ).all()
-    
-    if not alertas_data:
-        return {"status": "no_alerts", "sent": False}
-        
-    colegio = db.query(Colegio).filter(Colegio.id == str(colegio_id)).first()
-    nombre_colegio = colegio.nombre_colegio if colegio else "Establecimiento"
-    
-    if "macaya" in nombre_colegio.lower():
-        sender_email = settings.MC_SENDER_EMAIL or os.getenv("MC_SENDER_EMAIL")
-        sender_password = settings.MC_SENDER_PASSWORD or os.getenv("MC_SENDER_PASSWORD")
-    else:
-        sender_email = settings.DP_SENDER_EMAIL or os.getenv("DP_SENDER_EMAIL")
-        sender_password = settings.DP_SENDER_PASSWORD or os.getenv("DP_SENDER_PASSWORD")
-        
-    if not sender_email or not sender_password:
-        return {"status": "missing_smtp_credentials", "sent": False}
-        
-    to_emails = [d.email for d in destinatarios]
-    
-    # Formatear fecha para visualización
-    try:
-        parts = fecha_str.split('-')
-        fecha_desc = f"{parts[2]}/{parts[1]}/{parts[0]}"
-    except:
-        fecha_desc = fecha_str
-
-    filas_html = ""
-    for alerta, alu, taller in alertas_data:
-        filas_html += f"""
-        <tr>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{alu.nombre_completo}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{alu.rut}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{alu.curso}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{taller.nombre_taller}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #ddd; color: #d9383a; font-weight: bold;">Presente en Taller / Ausente en Colegio</td>
-        </tr>
-        """
-        
-    html_content = f"""
-    <html>
-    <head></head>
-    <body style="font-family: Arial, sans-serif; color: #333;">
-        <div style="max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
-            <div style="background-color: #1e293b; color: white; padding: 16px; text-align: center;">
-                <h2 style="margin: 0;">Reporte Global de Auditoria de Asistencia</h2>
-                <p style="margin: 4px 0 0; font-size: 14px; opacity: 0.9;">{nombre_colegio}</p>
-            </div>
-            <div style="padding: 20px;">
-                <p>Se ha ejecutado el <strong>Cierre Global de Sesiones</strong> correspondiente a la fecha <strong>{fecha_desc}</strong>. A continuacion se detallan todas las inconsistencias detectadas de alumnos presentes en talleres extraescolares que figuran ausentes en la asistencia regular del colegio:</p>
-                
-                <table style="width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px;">
-                    <thead>
-                        <tr style="background-color: #f1f5f9; text-align: left;">
-                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">Alumno</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">RUT</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">Curso</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">Taller</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #cbd5e1;">Inconsistencia</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filas_html}
-                    </tbody>
-                </table>
-                
-                <p style="margin-top: 24px; font-size: 12px; color: #64748b; text-align: center;">Generado automaticamente por el Sistema de Asistencia Extraescolar institucional.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    try:
-        msg = MIMEMultipart()
-        msg["From"] = f"Auditoria Extraescolar <{sender_email}>"
-        msg["To"] = ", ".join(to_emails)
-        msg["Subject"] = f"Reporte Consolidado Asistencia Extraescolar - {fecha_desc}"
-        
-        msg.attach(MIMEText(html_content, "html"))
-        
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
-        server.quit()
-        
-        return {"status": "sent_success", "sent": True, "recipients": len(to_emails)}
-    except Exception as e:
-        print(f"Error despachando digest global SMTP: {e}")
         return {"status": f"error: {str(e)}", "sent": False}
 

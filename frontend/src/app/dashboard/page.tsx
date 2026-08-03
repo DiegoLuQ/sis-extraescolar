@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import { usuariosApi, alumnosApi, talleresApi, estadisticasApi, inscripcionesApi
 import type { TallerOcupacion, AusentismoTaller, AlertaInasistencia, TallerAusentismoDetalle, Taller, AlumnoAsistenciaDetalle, EstadoAsistencia } from "@/types";
 import {
   Users, GraduationCap, BookOpen, AlertTriangle,
-  TrendingUp, Activity, Trash2, ChevronLeft, ChevronRight, Loader2, Phone, Eye, CreditCard, FileDown,
+  TrendingUp, Activity, Trash2, ChevronLeft, ChevronRight, Loader2, Phone, Eye, CreditCard, FileDown, ArrowRight,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
@@ -74,17 +75,16 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     try {
       const isCoordinador = user?.rol === "coordinador" || user?.rol === "admin";
-      const [usuarios, alumnos, talleres, ocupacionData, ausentismoData, alertasData] = await Promise.all([
-        usuariosApi.getAll(),
-        alumnosApi.getAll(),
+      const [resumenData, talleres, ocupacionData, ausentismoData, alertasData] = await Promise.all([
+        estadisticasApi.resumen(),
         talleresApi.getAll(),
         estadisticasApi.ocupacion(),
         estadisticasApi.ausentismo(),
-        isCoordinador ? estadisticasApi.alertasInasistencias() : Promise.resolve([]),
+        isCoordinador ? estadisticasApi.alertasInasistencias({ min_ausencias: 3 }) : Promise.resolve([]),
       ]);
-      setUsuariosCount(usuarios.length);
-      setAlumnosCount(alumnos.length);
-      setTalleresCount(talleres.length);
+      setUsuariosCount(resumenData.usuarios_count);
+      setAlumnosCount(resumenData.alumnos_count);
+      setTalleresCount(resumenData.talleres_count);
       setTalleresList(talleres);
       setOcupacion(ocupacionData);
       setAusentismo(ausentismoData);
@@ -421,176 +421,90 @@ export default function DashboardPage() {
       </div>
 
       {/* Tabla de alta inasistencia — solo coordinador/admin */}
-      {isCoordinadorOrAdmin && alertaRows.length > 0 && (
+      {/* Tabla de alta inasistencia — solo coordinador/admin */}
+      {isCoordinadorOrAdmin && (
         <Card className="border-0 shadow-md border-l-4 border-l-red-500">
-          <CardHeader>
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <CardTitle className="flex items-center gap-2 text-red-600">
+                <CardTitle className="flex items-center gap-2 text-red-600 text-base font-bold">
                   <AlertTriangle className="h-5 w-5" />
                   Alumnos con Alta Inasistencia
                 </CardTitle>
-                <CardDescription className="mt-1">
-                  Alumnos con más del 70% de inasistencia — se sugiere seguimiento o retiro del taller
+                <CardDescription className="mt-1 text-xs">
+                  Se muestran alumnos que registran <strong>más de 3 ausencias acumuladas</strong> en sus talleres.
                 </CardDescription>
               </div>
-              <Badge className="bg-red-100 text-red-700 border-red-200 shrink-0 text-xs">
-                {filteredAlertaRows.length} {filteredAlertaRows.length === 1 ? "registro" : "registros"}
-              </Badge>
-            </div>
-
-            {/* Panel de Filtros */}
-            <div className="flex flex-col sm:flex-row gap-4 mt-4 w-full">
-              <div className="flex-1">
-                <Input
-                  placeholder="Buscar alumno por nombre..."
-                  value={filtroNombre}
-                  onChange={(e) => {
-                    setFiltroNombre(e.target.value);
-                    setAlertaPage(0);
-                  }}
-                  className="bg-white border-gray-200 text-sm focus:border-calipso-400 focus:ring-calipso-400 focus:ring-1"
-                />
-              </div>
-              <div className="w-full sm:w-72">
-                <select
-                  value={filtroTaller}
-                  onChange={(e) => {
-                    setFiltroTaller(e.target.value);
-                    setAlertaPage(0);
-                  }}
-                  className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-calipso-400 focus:border-calipso-400"
-                >
-                  <option value="">Todos los talleres</option>
-                  {talleresList.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.nombre_taller} {user?.rol === "admin" && !localStorage.getItem("colegio_id") ? `(${t.nombre_colegio})` : ""}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex items-center gap-3 shrink-0">
+                <Badge className="bg-red-100 text-red-700 border-red-200 text-xs">
+                  {alertaRows.length} {alertaRows.length === 1 ? "caso crítico" : "casos críticos"}
+                </Badge>
+                <Link href="/dashboard/alta-inasistencia">
+                  <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold gap-1.5 shadow-sm">
+                    Ver Reporte Completo <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            {filteredAlertaRows.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 text-sm">
-                No hay registros que coincidan con los filtros aplicados.
+          <CardContent className="pt-2">
+            {alertaRows.length === 0 ? (
+              <div className="text-center py-6 text-gray-400 text-xs italic">
+                No hay alumnos registrados con más de 3 inasistencias en este momento.
               </div>
             ) : (
-              <>
+              <div className="space-y-3">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-gray-50/80">
-                      <TableHead className="pl-6">Alumno</TableHead>
+                    <TableRow className="bg-gray-50/80 text-xs">
+                      <TableHead className="pl-4">Alumno</TableHead>
                       <TableHead>Curso</TableHead>
                       <TableHead>Taller</TableHead>
-                      <TableHead>Inasistencia</TableHead>
-                      <TableHead className="pr-6 text-right">Acciones</TableHead>
+                      <TableHead>Faltas Acumuladas</TableHead>
+                      <TableHead className="pr-4 text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pagedRows.map((row, i) => (
-                      <TableRow key={`${row.alumno_id}-${row.inscripcion_id ?? i}`} className="hover:bg-red-50/30">
-                        <TableCell className="pl-6 font-medium text-gray-900">
+                    {alertaRows.slice(0, 5).map((row, i) => (
+                      <TableRow key={`${row.alumno_id}-${row.inscripcion_id ?? i}`} className="hover:bg-red-50/30 text-xs">
+                        <TableCell className="pl-4 font-semibold text-gray-900">
                           {row.nombre_completo}
                         </TableCell>
-                        <TableCell className="text-gray-500 text-sm">{row.curso}</TableCell>
-                        <TableCell className="text-gray-700 text-sm">{row.nombre_taller}</TableCell>
+                        <TableCell className="text-gray-500">{row.curso}</TableCell>
+                        <TableCell className="text-gray-700 font-medium">{row.nombre_taller}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400">{row.ausencias}/{row.total_sesiones} ses.</span>
-                            <Badge variant="destructive" className="text-xs">{row.porcentaje_ausencia}%</Badge>
+                            <span className="font-bold text-red-600">{row.ausencias} ausencias</span>
+                            <span className="text-xs text-gray-400">({row.porcentaje_ausencia}%)</span>
                           </div>
                         </TableCell>
-                        <TableCell className="pr-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 w-8 p-0 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
-                              onClick={() => handleVerDetalle(row.alumno_id)}
-                              title="Detalle"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {row.telefono ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 text-calipso-600 hover:text-calipso-800 hover:bg-calipso-50"
-                                onClick={() => {
-                                  const phonesList = row.telefono
-                                    ? row.telefono.split("/").map(p => p.trim()).filter(Boolean)
-                                    : [];
-                                  setSelectedAlumnoPhones({
-                                    nombre: row.nombre_completo,
-                                    phones: phonesList
-                                  });
-                                }}
-                                title="Ver teléfonos de contacto"
-                              >
-                                <Phone className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 text-gray-300 cursor-not-allowed"
-                                disabled
-                                title="Sin teléfono registrado"
-                              >
-                                <Phone className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                              disabled={deletingId === row.inscripcion_id || !row.inscripcion_id}
-                              onClick={() => handleEliminarInscripcion(row.inscripcion_id, row.nombre_completo, row.nombre_taller)}
-                              title="Retirar del taller"
-                            >
-                              {deletingId === row.inscripcion_id
-                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                : <Trash2 className="h-4 w-4" />
-                              }
-                            </Button>
-                          </div>
+                        <TableCell className="pr-4 text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                            onClick={() => handleVerDetalle(row.alumno_id)}
+                            title="Ver Detalle de Asistencia"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
 
-                {/* Paginación */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-6 py-3 border-t bg-gray-50/50">
-                    <span className="text-xs text-gray-400">
-                      Página {safeAlertaPage + 1} de {totalPages}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0"
-                        disabled={safeAlertaPage === 0}
-                        onClick={() => setAlertaPage(p => p - 1)}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0"
-                        disabled={safeAlertaPage >= totalPages - 1}
-                        onClick={() => setAlertaPage(p => p + 1)}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {alertaRows.length > 5 && (
+                  <div className="text-center pt-2 pb-1 border-t border-gray-100">
+                    <Link
+                      href="/dashboard/alta-inasistencia"
+                      className="text-xs font-semibold text-red-600 hover:text-red-800 inline-flex items-center gap-1 hover:underline"
+                    >
+                      Mostrando 5 de {alertaRows.length} casos. Haz clic para ver la lista completa con filtros <ArrowRight className="w-3 h-3" />
+                    </Link>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </CardContent>
         </Card>

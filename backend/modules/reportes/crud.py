@@ -495,3 +495,202 @@ def get_weekly_summary_report(db: Session, colegio_id: str, semanas_atras: int =
         "comparativa_totales_porcentaje": comparativa_totales_porcentaje
     }
 
+
+def generate_attendance_excel(
+    db: Session,
+    colegio_id: str,
+    mes: int,
+    anio: int,
+    fecha_inicio: str = None,
+    fecha_fin: str = None,
+    taller_id: str = None,
+    dias_semana_str: str = None
+):
+    import io
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from fastapi.responses import StreamingResponse
+
+    colegio = db.query(Colegio).filter(Colegio.id == colegio_id).first()
+    nombre_colegio = colegio.nombre_colegio if colegio else "Colegio"
+    colegio_lower = nombre_colegio.lower()
+
+    # Definir paleta temática
+    if "macaya" in colegio_lower:
+        # Tema Macaya: Verde oscuro / esmeralda
+        primary_color = "14532D"      # Dark green fill
+        accent_color = "DCFCE7"       # Soft green tint fill
+        header_font_color = "FFFFFF"  # White text
+        border_color = "A7F3D0"       # Light green border
+    else:
+        # Tema DP (Diego Portales / Defecto): Azul oscuro
+        primary_color = "1E3A8A"      # Dark blue fill
+        accent_color = "DBEAFE"       # Soft blue tint fill
+        header_font_color = "FFFFFF"  # White text
+        border_color = "BFDBFE"       # Light blue border
+
+    # Obtener datos del reporte mensual base
+    report_data = get_monthly_attendance_report(db, colegio_id, mes, anio)
+    active_days = report_data.get("active_days", [])
+    workshops = report_data.get("workshops", [])
+
+    dias_nombres = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+
+    def get_nombre_dia(fecha_str):
+        d = datetime.datetime.strptime(fecha_str, "%Y-%m-%d")
+        return dias_nombres[d.weekday() if d.weekday() != 6 else 0] if d.weekday() == 6 else dias_nombres[d.weekday() + 1]
+
+    dias_seleccionados = dias_semana_str.split(",") if dias_semana_str else ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+
+    # Filtrar días activos
+    active_days_filtrados = []
+    for day in active_days:
+        if fecha_inicio and day < fecha_inicio:
+            continue
+        if fecha_fin and day > fecha_fin:
+            continue
+        nombre_dia = get_nombre_dia(day)
+        if dias_seleccionados and nombre_dia not in dias_seleccionados:
+            continue
+        active_days_filtrados.append(day)
+
+    # Filtrar talleres
+    workshops_filtrados = []
+    for w in workshops:
+        if taller_id and str(w["id"]) != str(taller_id):
+            continue
+        if active_days_filtrados:
+            tiene_actividad = any(w["asistencias"].get(day) is not None for day in active_days_filtrados)
+            if not tiene_actividad:
+                continue
+        workshops_filtrados.append(w)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Detalle Asistencia"
+    ws.views.sheetView[0].showGridLines = True
+
+    # Estilos openpyxl
+    title_font = Font(name="Calibri", size=16, bold=True, color=primary_color)
+    subtitle_font = Font(name="Calibri", size=10, italic=True, color="555555")
+    header_font = Font(name="Calibri", size=11, bold=True, color=header_font_color)
+    data_font = Font(name="Calibri", size=10)
+    bold_font = Font(name="Calibri", size=10, bold=True)
+    
+    header_fill = PatternFill(start_color=primary_color, end_color=primary_color, fill_type="solid")
+    summary_fill = PatternFill(start_color=accent_color, end_color=accent_color, fill_type="solid")
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+
+    thin_border_side = Side(border_style="thin", color="CBD5E1")
+    grid_border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+    align_right = Alignment(horizontal="right", vertical="center")
+
+    # Fila 1 y 2: Título
+    meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    mes_str = meses_nombres[mes - 1] if 1 <= mes <= 12 else str(mes)
+
+    ws.cell(row=1, column=1, value=f"REPORTE DETALLE DE ASISTENCIA POR TALLER - {nombre_colegio.upper()}").font = title_font
+    ws.cell(row=2, column=1, value=f"Período: {mes_str} {anio} | Exportado el {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}").font = subtitle_font
+
+    # Fila 4: Encabezados
+    start_row = 4
+    headers = ["Taller", "Inscritos"]
+    for day in active_days_filtrados:
+        dia_num = day.split("-")[2]
+        dia_nom = get_nombre_dia(day)[:3].upper()
+        headers.append(f"{dia_nom} {dia_num}")
+    headers.extend(["Total", "Promedio"])
+
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=start_row, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = align_center
+        cell.border = grid_border
+
+    ws.row_dimensions[start_row].height = 26
+
+    # Filas de datos
+    current_row = start_row + 1
+    for r_idx, w in enumerate(workshops_filtrados):
+        ws.row_dimensions[current_row].height = 20
+        row_fill = zebra_fill if r_idx % 2 == 1 else None
+
+        # Taller
+        c_taller = ws.cell(row=current_row, column=1, value=w["nombre_taller"])
+        c_taller.font = bold_font
+        c_taller.alignment = align_left
+        c_taller.border = grid_border
+        if row_fill: c_taller.fill = row_fill
+
+        # Inscritos
+        c_ins = ws.cell(row=current_row, column=2, value=w["matriculados"])
+        c_ins.font = data_font
+        c_ins.alignment = align_center
+        c_ins.border = grid_border
+        if row_fill: c_ins.fill = row_fill
+
+        # Días
+        total_taller = 0
+        sesiones_contadas = 0
+        for d_idx, day in enumerate(active_days_filtrados, 3):
+            val = w["asistencias"].get(day)
+            c_val = ws.cell(row=current_row, column=d_idx)
+            if val is not None:
+                c_val.value = val
+                total_taller += val
+                sesiones_contadas += 1
+            else:
+                c_val.value = "-"
+            c_val.font = data_font
+            c_val.alignment = align_center
+            c_val.border = grid_border
+            if row_fill: c_val.fill = row_fill
+
+        prom = round(total_taller / sesiones_contadas, 1) if sesiones_contadas > 0 else 0.0
+
+        # Total
+        col_total_idx = len(headers) - 1
+        c_tot = ws.cell(row=current_row, column=col_total_idx, value=total_taller)
+        c_tot.font = bold_font
+        c_tot.fill = summary_fill
+        c_tot.alignment = align_center
+        c_tot.border = grid_border
+
+        # Promedio
+        c_prom = ws.cell(row=current_row, column=len(headers), value=prom)
+        c_prom.font = bold_font
+        c_prom.fill = summary_fill
+        c_prom.alignment = align_center
+        c_prom.border = grid_border
+
+        current_row += 1
+
+    # Auto-ajustar ancho de columnas
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.row < start_row:
+                continue
+            val_str = str(cell.value or "")
+            if len(val_str) > max_len:
+                max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 11) if col_letter != "A" else max(max_len + 4, 28)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"detalle_asistencia_{nombre_colegio}_{mes_str}_{anio}.xlsx".replace(" ", "_")
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+

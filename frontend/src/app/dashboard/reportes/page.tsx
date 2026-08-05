@@ -155,48 +155,38 @@ export default function ReportesPage() {
     return true;
   });
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!reportData || workshopsFiltrados.length === 0) {
       toast.error("No hay datos para exportar");
       return;
     }
 
-    let csvContent = "\uFEFF"; // UTF-8 BOM para soporte correcto en Excel
-    const headers = [
-      "Taller",
-      "Inscritos",
-      ...activeDaysFiltrados.map((d: string) => `${getNombreDiaSemana(d)} ${d.split("-")[2]}`),
-      "Total",
-      "Promedio"
-    ];
-    csvContent += headers.map((h) => `"${h}"`).join(",") + "\n";
-
-    workshopsFiltrados.forEach((w: any) => {
-      let totalTaller = 0;
-      let sesionesContadas = 0;
-      const dailyValues = activeDaysFiltrados.map((d: string) => {
-        const val = w.asistencias[d];
-        if (val !== null && val !== undefined) {
-          totalTaller += val;
-          sesionesContadas++;
-          return val;
-        }
-        return "-";
+    try {
+      const blob = await reportesApi.exportarDetalleExcel({
+        mes: parseInt(mes),
+        anio: parseInt(anio),
+        fecha_inicio: filtroFechaInicio || undefined,
+        fecha_fin: filtroFechaFin || undefined,
+        taller_id: filtroTallerMatriz || undefined,
+        dias_semana: diasSemanaSeleccionados.length > 0 ? diasSemanaSeleccionados.join(",") : undefined
       });
-      const prom = sesionesContadas > 0 ? (totalTaller / sesionesContadas).toFixed(1) : "0.0";
-      const row = [`"${w.nombre_taller}"`, w.matriculados, ...dailyValues, totalTaller, prom];
-      csvContent += row.join(",") + "\n";
-    });
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `detalle_asistencia_${colegioNombre || "taller"}_${mes}_${anio}.csv`.replace(/\s+/g, "_"));
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Reporte exportado a Excel exitosamente");
+      const mesObj = meses.find(m => m.value === mes);
+      const mesNombre = mesObj ? mesObj.label : mes;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `detalle_asistencia_${colegioNombre || "taller"}_${mesNombre}_${anio}.xlsx`.replace(/\s+/g, "_"));
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Reporte exportado a Excel (.xlsx) exitosamente");
+    } catch (error) {
+      console.error("Error exporting excel:", error);
+      toast.error("Error al exportar el reporte a Excel");
+    }
   };
 
   const meses = [

@@ -66,3 +66,30 @@ def get_weekly_summary(
     
     return crud.get_weekly_summary_report(db, tenant.colegio_id, semanas_atras)
 
+
+@router.get("/exportar-detalle-excel")
+def exportar_detalle_excel(
+    mes: int = Query(..., ge=1, le=12),
+    anio: int = Query(...),
+    fecha_inicio: str = Query(None),
+    fecha_fin: str = Query(None),
+    taller_id: str = Query(None),
+    dias_semana: str = Query(None),
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    if tenant.rol == "monitor":
+        raise HTTPException(status_code=403, detail="No tienes permisos para exportar reportes")
+    
+    return crud.generate_attendance_excel(
+        db=db,
+        colegio_id=tenant.colegio_id,
+        mes=mes,
+        anio=anio,
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+        taller_id=taller_id,
+        dias_semana_str=dias_semana
+    )
+
+

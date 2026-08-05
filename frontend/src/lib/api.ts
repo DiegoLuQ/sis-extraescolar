@@ -450,6 +450,20 @@ export const reportesApi = {
     const response = await api.get('/api/reportes/metas', { params: { mes, anio } });
     return response.data;
   },
+  exportarDetalleExcel: async (params: {
+    mes: number;
+    anio: number;
+    fecha_inicio?: string;
+    fecha_fin?: string;
+    taller_id?: string;
+    dias_semana?: string;
+  }): Promise<Blob> => {
+    const response = await api.get('/api/reportes/exportar-detalle-excel', {
+      params,
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
 
 export interface CorreoReporte {

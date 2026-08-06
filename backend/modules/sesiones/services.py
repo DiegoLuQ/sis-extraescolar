@@ -312,6 +312,7 @@ def enviar_alerta_inconsistencia_individual(db: Session, sesion_id: UUID, alumno
     from modules.colegios.models import Colegio
     from modules.talleres.models import Taller
     from modules.sesiones.models import Sesion
+    from core.smtp_utils import obtener_destinatarios_to_y_cc
 
     # 1. Obtener datos de sesión, taller, colegio y alumno
     sesion = db.query(Sesion).filter(Sesion.id == str(sesion_id)).first()
@@ -348,15 +349,11 @@ def enviar_alerta_inconsistencia_individual(db: Session, sesion_id: UUID, alumno
         print("Faltan credenciales SMTP en variables de entorno")
         return {"status": "missing_smtp_credentials", "sent": False}
 
-    # 3. Obtener destinatarios habilitados y filtrar por dominio
-    todos_destinatarios = get_correos_habilitados_by_colegio(db, colegio_id)
-    if dominio_filtro:
-        destinatarios = [d for d in todos_destinatarios if d.email.lower().endswith(dominio_filtro)]
-    else:
-        destinatarios = todos_destinatarios
+    # 3. Obtener destinatarios habilitados explícitamente asignados al colegio
+    destinatarios = get_correos_habilitados_by_colegio(db, colegio_id)
 
     if not destinatarios:
-        print(f"No hay destinatarios habilitados con dominio '{dominio_filtro}' para el colegio {colegio_id}")
+        print(f"No hay destinatarios habilitados registrados para el colegio {colegio_id}")
         return {"status": "no_recipients", "sent": False}
 
     destinatarios_emails = [d.email for d in destinatarios]

@@ -93,3 +93,45 @@ def exportar_detalle_excel(
     )
 
 
+@router.get("/ranking-alumnos")
+def get_ranking_alumnos(
+    mes: int = Query(None, ge=1, le=12),
+    anio: int = Query(None),
+    taller_id: str = Query(None),
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    if tenant.rol == "monitor":
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver reportes globales")
+    return crud.get_ranking_alumnos(
+        db=db,
+        colegio_id=tenant.colegio_id,
+        mes=mes,
+        anio=anio,
+        taller_id=taller_id
+    )
+
+
+@router.get("/alumno-detalle/{alumno_id}")
+def get_alumno_detalle(
+    alumno_id: str,
+    mes: int = Query(None, ge=1, le=12),
+    anio: int = Query(None),
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    if tenant.rol == "monitor":
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver el detalle de asistencia")
+    res = crud.get_alumno_detalle_asistencia(
+        db=db,
+        alumno_id=alumno_id,
+        colegio_id=tenant.colegio_id,
+        mes=mes,
+        anio=anio
+    )
+    if res.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Alumno no encontrado")
+    return res
+
+
+

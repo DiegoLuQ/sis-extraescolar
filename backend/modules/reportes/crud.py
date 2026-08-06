@@ -5,7 +5,7 @@ from modules.colegios.models import Colegio
 from modules.sesiones.models import Sesion
 from modules.asistencias.models import Asistencia, EstadoAsistenciaEnum
 from modules.inscripciones.models import Inscripcion, EstadoInscripcionEnum
-from typing import List, Dict
+from typing import List, Dict, Optional
 import datetime
 
 # Estados que cuentan como "asistió" en el numerador. Solo 'ausente' baja el %.
@@ -692,5 +692,234 @@ def generate_attendance_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+def get_ranking_alumnos(
+    db: Session,
+    colegio_id: str,
+    mes: Optional[int] = None,
+    anio: Optional[int] = None,
+    taller_id: Optional[str] = None
+) -> List[Dict]:
+    """
+    Retorna la lista de alumnos ordenados por su porcentaje global de asistencia
+    en sus talleres correspondientes al colegio especificado.
+    """
+    from modules.alumnos.models import Alumno
+    from modules.inscripciones.models import Inscripcion
+    from modules.talleres.models import Taller
+    from modules.sesiones.models import Sesion
+    from modules.asistencias.models import Asistencia
+
+    # Query base de alumnos inscritos en talleres del colegio
+    query_ins = db.query(Inscripcion, Alumno, Taller).join(
+        Alumno, Inscripcion.alumno_id == Alumno.id
+    ).join(
+        Taller, Inscripcion.taller_id == Taller.id
+    ).filter(
+        Taller.colegio_id == str(colegio_id),
+        Inscripcion.estado == "inscrito"
+    )
+
+    if taller_id:
+        query_ins = query_ins.filter(Taller.id == str(taller_id))
+
+    inscripciones = query_ins.all()
+    if not inscripciones:
+        return []
+
+    # Mapear datos por alumno
+    alumnos_dict = {}
+    for ins, alu, tal in inscripciones:
+        if alu.id not in alumnos_dict:
+            alumnos_dict[alu.id] = {
+                "alumno_id": alu.id,
+                "nombre_completo": alu.nombre_completo,
+                "rut": alu.rut,
+                "curso": alu.curso,
+                "talleres": [tal.nombre_taller],
+                "taller_ids": [tal.id],
+                "presentes": 0,
+                "ausentes": 0,
+                "justificados": 0,
+                "atrasos": 0,
+                "total_sesiones": 0
+            }
+        else:
+            if tal.nombre_taller not in alumnos_dict[alu.id]["talleres"]:
+                alumnos_dict[alu.id]["talleres"].append(tal.nombre_taller)
+                alumnos_dict[alu.id]["taller_ids"].append(tal.id)
+
+    alumno_ids = list(alumnos_dict.keys())
+
+    # Obtener todas las asistencias de sesiones realizadas
+    query_asist = db.query(Asistencia, Sesion).join(
+        Sesion, Asistencia.sesion_id == Sesion.id
+    ).join(
+        Taller, Sesion.taller_id == Taller.id
+    ).filter(
+        Asistencia.alumno_id.in_(alumno_ids),
+        Taller.colegio_id == str(colegio_id)
+    )
+
+    if taller_id:
+        query_asist = query_asist.filter(Taller.id == str(taller_id))
+    if anio:
+        query_asist = query_asist.filter(extract('year', Sesion.fecha_sesion) == anio)
+    if mes:
+        query_asist = query_asist.filter(extract('month', Sesion.fecha_sesion) == mes)
+
+    asistencias_list = query_asist.all()
+
+    for asist, ses in asistencias_list:
+        alu_id = asist.alumno_id
+        if alu_id in alumnos_dict:
+            st = (asist.estado_asistencia or "").lower()
+            alumnos_dict[alu_id]["total_sesiones"] += 1
+            if st == "presente":
+                alumnos_dict[alu_id]["presentes"] += 1
+            elif st == "atraso":
+                alumnos_dict[alu_id]["presentes"] += 1
+                alumnos_dict[alu_id]["atrasos"] += 1
+            elif st == "ausente":
+                alumnos_dict[alu_id]["ausentes"] += 1
+            elif st == "justificado":
+                alumnos_dict[alu_id]["justificados"] += 1
+
+    resultado = []
+    for alu_id, data in alumnos_dict.items():
+        tot = data["total_sesiones"]
+        pres = data["presentes"]
+        pct = round((pres / tot * 100), 1) if tot > 0 else 0.0
+        
+        resultado.append({
+            "alumno_id": data["alumno_id"],
+            "nombre_completo": data["nombre_completo"],
+            "rut": data["rut"],
+            "curso": data["curso"],
+            "talleres": data["talleres"],
+            "total_sesiones": tot,
+            "presentes": pres,
+            "ausentes": data["ausentes"],
+            "justificados": data["justificados"],
+            "atrasos": data["atrasos"],
+            "porcentaje_asistencia": pct
+        })
+
+    # Ordenar por porcentaje de asistencia descendente y luego por nombre
+    resultado.sort(key=lambda x: (-x["porcentaje_asistencia"], x["nombre_completo"]))
+    return resultado
+
+
+def get_alumno_detalle_asistencia(
+    db: Session,
+    alumno_id: str,
+    colegio_id: str,
+    mes: Optional[int] = None,
+    anio: Optional[int] = None
+) -> Dict:
+    """
+    Retorna la ficha de asistencia detallada de un alumno, incluyendo
+    sus talleres y el listado cronológico de sesiones asistidas/faltadas.
+    """
+    from modules.alumnos.models import Alumno
+    from modules.inscripciones.models import Inscripcion
+    from modules.talleres.models import Taller
+    from modules.sesiones.models import Sesion
+    from modules.asistencias.models import Asistencia
+
+    alumno = db.query(Alumno).filter(Alumno.id == str(alumno_id)).first()
+    if not alumno:
+        return {"status": "not_found"}
+
+    # Obtener inscripciones
+    from modules.usuarios.models import Usuario
+    inscripciones = db.query(Inscripcion, Taller, Usuario).join(
+        Taller, Inscripcion.taller_id == Taller.id
+    ).outerjoin(
+        Usuario, Taller.profesor_id == Usuario.id
+    ).filter(
+        Inscripcion.alumno_id == str(alumno_id),
+        Taller.colegio_id == str(colegio_id)
+    ).all()
+
+    talleres_list = []
+    for ins, tal, usu in inscripciones:
+        nombre_prof = (usu.nombre_2 or usu.nombre) if usu else ""
+        talleres_list.append({
+            "taller_id": tal.id,
+            "nombre_taller": tal.nombre_taller,
+            "profesor": nombre_prof,
+            "estado_inscripcion": ins.estado
+        })
+
+    # Obtener historial de asistencias
+    query = db.query(Asistencia, Sesion, Taller).join(
+        Sesion, Asistencia.sesion_id == Sesion.id
+    ).join(
+        Taller, Sesion.taller_id == Taller.id
+    ).filter(
+        Asistencia.alumno_id == str(alumno_id),
+        Taller.colegio_id == str(colegio_id)
+    )
+
+    if anio:
+        query = query.filter(extract('year', Sesion.fecha_sesion) == anio)
+    if mes:
+        query = query.filter(extract('month', Sesion.fecha_sesion) == mes)
+
+    query = query.order_by(Sesion.fecha_sesion.desc())
+    registros = query.all()
+
+    historial = []
+    presentes = 0
+    ausentes = 0
+    justificados = 0
+    atrasos = 0
+
+    for asist, ses, tal in registros:
+        st = (asist.estado_asistencia or "").lower()
+        if st == "presente":
+            presentes += 1
+        elif st == "atraso":
+            presentes += 1
+            atrasos += 1
+        elif st == "ausente":
+            ausentes += 1
+        elif st == "justificado":
+            justificados += 1
+
+        historial.append({
+            "asistencia_id": asist.id,
+            "fecha": ses.fecha_sesion.strftime("%Y-%m-%d"),
+            "taller_nombre": tal.nombre_taller,
+            "estado": asist.estado_asistencia,
+            "observaciones": asist.observaciones,
+            "bloqueada": ses.bloqueada
+        })
+
+    total_sesiones = len(registros)
+    porcentaje = round((presentes / total_sesiones * 100), 1) if total_sesiones > 0 else 0.0
+
+    return {
+        "alumno": {
+            "id": alumno.id,
+            "nombre_completo": alumno.nombre_completo,
+            "rut": alumno.rut,
+            "curso": alumno.curso,
+            "telefono": alumno.telefono
+        },
+        "resumen": {
+            "total_sesiones": total_sesiones,
+            "presentes": presentes,
+            "ausentes": ausentes,
+            "justificados": justificados,
+            "atrasos": atrasos,
+            "porcentaje_asistencia": porcentaje
+        },
+        "talleres": talleres_list,
+        "historial": historial
+    }
+
 
 

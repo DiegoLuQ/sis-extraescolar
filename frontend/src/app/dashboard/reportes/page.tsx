@@ -27,9 +27,17 @@ import {
   TabsList, 
   TabsTrigger 
 } from "../../../components/ui/tabs";
-import { Loader2, FileDown, Calendar, Users, TrendingUp, Filter, BarChart, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Activity, Sparkles, ImageDown } from "lucide-react";
+import { Loader2, FileDown, Calendar, Users, TrendingUp, Filter, BarChart, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Activity, Sparkles, ImageDown, Trophy, Medal, Award, AlertCircle, Eye, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 export default function ReportesPage() {
   const { user } = useAuthStore();
@@ -45,6 +53,20 @@ export default function ReportesPage() {
   const [activeTab, setActiveTab] = useState<string>("mensual");
   const [mes, setMes] = useState<string>((new Date().getMonth() + 1).toString());
   const [anio, setAnio] = useState<string>(new Date().getFullYear().toString());
+
+  // Estados para Ranking & Ficha Alumno
+  const fichaPrintRef = useRef<HTMLDivElement>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [rankingData, setRankingData] = useState<any[]>([]);
+  const [loadingRanking, setLoadingRanking] = useState(false);
+  const [rankingFiltroRango, setRankingFiltroRango] = useState<"todos" | "100" | "90" | "75" | "bajo75">("todos");
+  const [rankingBusqueda, setRankingBusqueda] = useState("");
+  const [selectedAlumnoId, setSelectedAlumnoId] = useState<string | null>(null);
+  const [alumnoDetalle, setAlumnoDetalle] = useState<any>(null);
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
+  const [isModalAlumnoOpen, setIsModalAlumnoOpen] = useState(false);
+  const [rankingCurrentPage, setRankingCurrentPage] = useState<number>(1);
+  const rankingItemsPerPage = 30;
 
   const [showDailyDetail, setShowDailyDetail] = useState<boolean>(true);
 
@@ -235,6 +257,207 @@ export default function ReportesPage() {
     }
   }, [metasData]);
 
+  const fetchRanking = async () => {
+    setLoadingRanking(true);
+    try {
+      const data = await reportesApi.getRankingAlumnos({
+        anio: parseInt(anio)
+      });
+      setRankingData(data);
+    } catch (error) {
+      console.error("Error fetching ranking:", error);
+      toast.error("Error al cargar el ranking de alumnos");
+    } finally {
+      setLoadingRanking(false);
+    }
+  };
+
+  const handleVerFichaAlumno = async (alumnoId: string) => {
+    setSelectedAlumnoId(alumnoId);
+    setIsModalAlumnoOpen(true);
+    setLoadingDetalle(true);
+    try {
+      const data = await reportesApi.getAlumnoDetalle(alumnoId, {
+        anio: parseInt(anio)
+      });
+      setAlumnoDetalle(data);
+    } catch (error) {
+      console.error("Error fetching alumno detalle:", error);
+      toast.error("Error al obtener la ficha del alumno");
+    } finally {
+      setLoadingDetalle(false);
+    }
+  };
+
+  const handleExportFichaPdf = () => {
+    if (!alumnoDetalle) return;
+    setExportingPdf(true);
+
+    try {
+      const nombreColegioStr = colegioNombre || "Establecimiento Educacional";
+      const fechaEmision = new Date().toLocaleDateString("es-CL", { day: '2-digit', month: 'long', year: 'numeric' });
+      const alu = alumnoDetalle.alumno;
+      const res = alumnoDetalle.resumen;
+      const pctColor = res.porcentaje_asistencia >= 90 ? "#10b981" : res.porcentaje_asistencia >= 75 ? "#0284c7" : "#f43f5e";
+
+      const talleresRows = alumnoDetalle.talleres.map((t: any) => `
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 14px; border-radius: 8px; font-size: 11px;">
+          <strong style="color: #0f172a; font-size: 12px; display: block;">${t.nombre_taller}</strong>
+          ${t.profesor ? `<span style="color: #64748b;">Profesor(a): ${t.profesor}</span>` : ''}
+        </div>
+      `).join("");
+
+      const historialRows = alumnoDetalle.historial.map((h: any) => {
+        const st = (h.estado || "").toLowerCase();
+        let badgeBg = "#f1f5f9";
+        let badgeColor = "#475569";
+        let borderCol = "#cbd5e1";
+
+        if (st === "presente" || st === "atraso") {
+          badgeBg = "#ecfdf5"; badgeColor = "#047857"; borderCol = "#a7f3d0";
+        } else if (st === "ausente") {
+          badgeBg = "#fff1f2"; badgeColor = "#be123c"; borderCol = "#fecdd3";
+        } else if (st === "justificado") {
+          badgeBg = "#fffbeb"; badgeColor = "#b45309"; borderCol = "#fde68a";
+        }
+
+        const fechaFmt = new Date(h.fecha + "T00:00:00").toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+        return `
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 10px 12px; font-weight: bold; color: #1e293b;">${fechaFmt}</td>
+            <td style="padding: 10px 12px; font-weight: 600; color: #334155;">${h.taller_nombre}</td>
+            <td style="padding: 10px 12px; text-align: center;">
+              <span style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${borderCol}; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 900; text-transform: uppercase;">
+                ${h.estado ? h.estado.toUpperCase() : "SIN MARCAR"}
+              </span>
+            </td>
+            <td style="padding: 10px 12px; color: #64748b; font-style: italic;">${h.observaciones || '—'}</td>
+          </tr>
+        `;
+      }).join("");
+
+      const htmlTemplate = `
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <title>Informe de Asistencia - ${alu.nombre_completo}</title>
+          <style>
+            @page { size: A4; margin: 15mm; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; background: #fff; margin: 0; padding: 20px; line-height: 1.4; }
+            .header { border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+            .title { font-size: 18px; font-weight: 900; color: #0f172a; margin: 0; }
+            .subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
+            .school { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #0284c7; letter-spacing: 1px; }
+            
+            .student-card { background: #0f172a; color: #fff; padding: 18px 22px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+            .student-name { font-size: 18px; font-weight: 900; margin: 0; }
+            .student-info { font-size: 12px; color: #cbd5e1; margin-top: 4px; }
+            .global-badge { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 10px; text-align: center; }
+            .global-label { font-size: 9px; font-weight: bold; color: #94a3b8; letter-spacing: 0.5px; }
+            .global-value { font-size: 26px; font-weight: 900; color: ${pctColor}; }
+
+            .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+            .kpi-box { padding: 12px; border-radius: 10px; text-align: center; }
+            .kpi-pres { background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; }
+            .kpi-aus { background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; }
+            .kpi-just { background: #fffbeb; border: 1px solid #fde68a; color: #b45309; }
+            .kpi-tot { background: #f8fafc; border: 1px solid #e2e8f0; color: #334155; }
+            .kpi-label { font-size: 10px; font-weight: bold; text-transform: uppercase; }
+            .kpi-num { font-size: 22px; font-weight: 900; display: block; margin-top: 2px; }
+
+            .section-title { font-size: 12px; font-weight: 900; text-transform: uppercase; color: #334155; margin-bottom: 10px; letter-spacing: 0.5px; border-left: 3px solid #0284c7; padding-left: 8px; }
+            .workshops-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 24px; }
+
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+            th { background: #f1f5f9; color: #334155; font-weight: 800; text-align: left; padding: 10px 12px; border-bottom: 2px solid #e2e8f0; }
+            
+            .footer { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 12px; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="school">${nombreColegioStr}</div>
+              <h1 class="title">INFORME DE ASISTENCIA EXTRAESCOLAR</h1>
+              <div class="subtitle">Documento Oficial de Registro y Participación de Alumno</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 9px; font-weight: bold; color: #94a3b8;">FECHA DE EMISIÓN</div>
+              <div style="font-size: 11px; font-weight: bold; color: #334155;">${fechaEmision}</div>
+            </div>
+          </div>
+
+          <div class="student-card">
+            <div>
+              <div class="student-name">${alu.nombre_completo}</div>
+              <div class="student-info">RUT: <b>${alu.rut}</b> &nbsp;•&nbsp; Curso: <b>${alu.curso}</b></div>
+            </div>
+            <div class="global-badge">
+              <div class="global-label">ASISTENCIA GLOBAL</div>
+              <div class="global-value">${res.porcentaje_asistencia}%</div>
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi-box kpi-pres"><span class="kpi-label">Presentes</span><span class="kpi-num">${res.presentes}</span></div>
+            <div class="kpi-box kpi-aus"><span class="kpi-label">Ausentes</span><span class="kpi-num">${res.ausentes}</span></div>
+            <div class="kpi-box kpi-just"><span class="kpi-label">Justificados</span><span class="kpi-num">${res.justificados}</span></div>
+            <div class="kpi-box kpi-tot"><span class="kpi-label">Total Clases</span><span class="kpi-num">${res.total_sesiones}</span></div>
+          </div>
+
+          <div class="section-title">Talleres Inscritos</div>
+          <div class="workshops-grid">${talleresRows}</div>
+
+          <div class="section-title" style="margin-top: 20px;">Registro Cronológico de Sesiones Dictadas</div>
+          ${alumnoDetalle.historial.length === 0 
+            ? `<div style="text-align: center; color: #94a3b8; padding: 20px; font-size: 12px; font-style: italic;">No hay registros de asistencia en el período.</div>`
+            : `<table>
+                <thead>
+                  <tr>
+                    <th style="width: 15%;">Fecha</th>
+                    <th style="width: 40%;">Taller Extraescolar</th>
+                    <th style="width: 20%; text-align: center;">Estado</th>
+                    <th style="width: 25%;">Observaciones</th>
+                  </tr>
+                </thead>
+                <tbody>${historialRows}</tbody>
+              </table>`
+          }
+
+          <div class="footer">
+            <div>Coordinación de Extraescolar — ${nombreColegioStr}</div>
+            <div>Documento generado por Sistema Sis-Extraescolar</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+        </html>
+      `;
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.open();
+        printWindow.document.write(htmlTemplate);
+        printWindow.document.close();
+        toast.success("Abriendo vista previa para guardar/imprimir PDF");
+      } else {
+        toast.error("Permite las ventanas emergentes para abrir el PDF");
+      }
+    } catch (error) {
+      console.error("Error al generar PDF:", error);
+      toast.error("Error al exportar la ficha a PDF");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const fetchAllReports = async () => {
     setLoading(true);
     try {
@@ -248,6 +471,7 @@ export default function ReportesPage() {
       setWeeklyData(semanal);
       setAnnualData(anual);
       setMetasData(metas);
+      await fetchRanking();
     } catch (error) {
       console.error("Error fetching reports:", error);
       toast.error("Error al cargar los reportes");
@@ -643,6 +867,10 @@ export default function ReportesPage() {
           <TabsTrigger value="semanal" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Resumen Semanal</TabsTrigger>
           <TabsTrigger value="anual" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Consolidado Anual</TabsTrigger>
           <TabsTrigger value="metas" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0">Metas por Taller</TabsTrigger>
+          <TabsTrigger value="ranking" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0 flex items-center gap-1.5">
+            <Trophy className="h-3.5 w-3.5" />
+            Ranking & Ficha Alumnos
+          </TabsTrigger>
         </TabsList>
 
         {/* CONTENIDO MENSUAL */}
@@ -1206,7 +1434,467 @@ export default function ReportesPage() {
             );
           })()}
         </TabsContent>
+
+        {/* CONTENIDO RANKING & FICHA ALUMNOS */}
+        <TabsContent value="ranking" className="space-y-6">
+          <Card className="border-0 shadow-md bg-white overflow-hidden">
+            <CardHeader className="bg-slate-50/60 border-b border-slate-100 p-4 sm:p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-amber-500" />
+                    Ranking de Asistencia de Alumnos
+                  </CardTitle>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Consulta el nivel de asistencia global por alumno y accede a su ficha detallada por fechas.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre o RUT..."
+                      value={rankingBusqueda}
+                      onChange={(e) => {
+                        setRankingBusqueda(e.target.value);
+                        setRankingCurrentPage(1);
+                      }}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-calipso-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de Filtro Rápido */}
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <span className="text-xs font-bold text-gray-500 mr-1">Filtrar por Asistencia:</span>
+                <Button
+                  type="button"
+                  variant={rankingFiltroRango === "todos" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setRankingFiltroRango("todos");
+                    setRankingCurrentPage(1);
+                  }}
+                  className="h-8 text-xs rounded-full font-bold"
+                >
+                  Todos ({rankingData.length})
+                </Button>
+                <Button
+                  type="button"
+                  variant={rankingFiltroRango === "100" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setRankingFiltroRango("100");
+                    setRankingCurrentPage(1);
+                  }}
+                  className={`h-8 text-xs rounded-full font-bold ${
+                    rankingFiltroRango === "100" ? "bg-amber-500 hover:bg-amber-600 text-white" : "text-amber-700 border-amber-200 hover:bg-amber-50"
+                  }`}
+                >
+                  <Trophy className="h-3.5 w-3.5 mr-1" />
+                  100% Asistencia
+                </Button>
+                <Button
+                  type="button"
+                  variant={rankingFiltroRango === "90" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setRankingFiltroRango("90");
+                    setRankingCurrentPage(1);
+                  }}
+                  className={`h-8 text-xs rounded-full font-bold ${
+                    rankingFiltroRango === "90" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  }`}
+                >
+                  <Medal className="h-3.5 w-3.5 mr-1" />
+                  ≥ 90%
+                </Button>
+                <Button
+                  type="button"
+                  variant={rankingFiltroRango === "75" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setRankingFiltroRango("75");
+                    setRankingCurrentPage(1);
+                  }}
+                  className={`h-8 text-xs rounded-full font-bold ${
+                    rankingFiltroRango === "75" ? "bg-blue-600 hover:bg-blue-700 text-white" : "text-blue-700 border-blue-200 hover:bg-blue-50"
+                  }`}
+                >
+                  <Award className="h-3.5 w-3.5 mr-1" />
+                  ≥ 75%
+                </Button>
+                <Button
+                  type="button"
+                  variant={rankingFiltroRango === "bajo75" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setRankingFiltroRango("bajo75");
+                    setRankingCurrentPage(1);
+                  }}
+                  className={`h-8 text-xs rounded-full font-bold ${
+                    rankingFiltroRango === "bajo75" ? "bg-rose-600 hover:bg-rose-700 text-white" : "text-rose-700 border-rose-200 hover:bg-rose-50"
+                  }`}
+                >
+                  <AlertCircle className="h-3.5 w-3.5 mr-1" />
+                  Bajo 75% (Alerta)
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-0">
+              {loadingRanking ? (
+                <div className="flex items-center justify-center h-48">
+                  <Loader2 className="h-6 w-6 animate-spin text-calipso-500" />
+                </div>
+              ) : (
+                (() => {
+                  const filtrados = rankingData.filter(alu => {
+                    const q = rankingBusqueda.toLowerCase().trim();
+                    const coincideQuery = !q || alu.nombre_completo.toLowerCase().includes(q) || alu.rut.toLowerCase().includes(q) || alu.curso.toLowerCase().includes(q);
+                    if (!coincideQuery) return false;
+
+                    const pct = alu.porcentaje_asistencia;
+                    if (rankingFiltroRango === "100") return pct >= 100;
+                    if (rankingFiltroRango === "90") return pct >= 90;
+                    if (rankingFiltroRango === "75") return pct >= 75;
+                    if (rankingFiltroRango === "bajo75") return pct < 75;
+                    return true;
+                  });
+
+                  if (filtrados.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-gray-400">
+                        <Users className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">No se encontraron alumnos para los criterios seleccionados.</p>
+                      </div>
+                    );
+                  }
+
+                  const totalPages = Math.ceil(filtrados.length / rankingItemsPerPage);
+                  const startIndex = (rankingCurrentPage - 1) * rankingItemsPerPage;
+                  const paginados = filtrados.slice(startIndex, startIndex + rankingItemsPerPage);
+
+                  return (
+                    <div>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50/80">
+                              <TableHead className="w-12 text-center font-bold text-gray-700">#</TableHead>
+                              <TableHead className="font-bold text-gray-700">Alumno</TableHead>
+                              <TableHead className="font-bold text-gray-700">Curso</TableHead>
+                              <TableHead className="font-bold text-gray-700">Talleres Inscritos</TableHead>
+                              <TableHead className="text-center font-bold text-gray-700">Sesiones Asistidas</TableHead>
+                              <TableHead className="text-center font-bold text-gray-700">% Asistencia</TableHead>
+                              <TableHead className="text-right font-bold text-gray-700 pr-6">Acciones</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {paginados.map((alu, idx) => {
+                              const posGlobal = startIndex + idx + 1;
+                              const pct = alu.porcentaje_asistencia;
+                              const badgeColor = pct >= 90 
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                                : pct >= 75
+                                ? "bg-blue-100 text-blue-800 border-blue-200"
+                                : "bg-rose-100 text-rose-800 border-rose-200";
+
+                              return (
+                                <TableRow key={alu.alumno_id} className="hover:bg-slate-50/60 transition-colors">
+                                  <TableCell className="text-center font-black text-xs text-gray-400">
+                                    {posGlobal === 1 ? (
+                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-100 text-amber-800 font-extrabold text-xs">1</span>
+                                    ) : posGlobal === 2 ? (
+                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-200 text-slate-700 font-extrabold text-xs">2</span>
+                                    ) : posGlobal === 3 ? (
+                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-700/20 text-amber-900 font-extrabold text-xs">3</span>
+                                    ) : (
+                                      posGlobal
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-sm text-gray-900">{alu.nombre_completo}</span>
+                                      <span className="text-[10px] text-gray-400">{alu.rut}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-xs text-gray-600">{alu.curso}</TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-wrap gap-1">
+                                      {alu.talleres.map((t: string) => (
+                                        <Badge key={t} variant="outline" className="text-[10px] font-normal bg-gray-50 border-gray-200">
+                                          {t}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className="font-bold text-sm text-gray-800">{alu.presentes}</span>
+                                    <span className="text-xs text-gray-400"> / {alu.total_sesiones}</span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black border ${badgeColor}`}>
+                                      {pct}%
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-right pr-6">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleVerFichaAlumno(alu.alumno_id)}
+                                      className="h-8 text-xs font-bold text-calipso-600 hover:text-calipso-700 hover:bg-calipso-50 border-calipso-200"
+                                    >
+                                      <Eye className="h-3.5 w-3.5 mr-1" />
+                                      Ver Ficha
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Paginador */}
+                      <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+                        <span className="text-xs text-gray-500 font-medium">
+                          Mostrando <b>{startIndex + 1}</b> a <b>{Math.min(startIndex + rankingItemsPerPage, filtrados.length)}</b> de <b>{filtrados.length}</b> alumnos
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={rankingCurrentPage === 1}
+                            onClick={() => setRankingCurrentPage(prev => Math.max(prev - 1, 1))}
+                            className="h-8 text-xs font-bold text-gray-600"
+                          >
+                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            Anterior
+                          </Button>
+                          <span className="text-xs font-bold text-gray-700 px-2">
+                            Página {rankingCurrentPage} de {totalPages || 1}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={rankingCurrentPage >= totalPages}
+                            onClick={() => setRankingCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            className="h-8 text-xs font-bold text-gray-600"
+                          >
+                            Siguiente
+                            <ChevronRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* MODAL FICHA DE ASISTENCIA INDIVIDUAL */}
+      <Dialog open={isModalAlumnoOpen} onOpenChange={setIsModalAlumnoOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between pr-6">
+              <div>
+                <DialogTitle className="text-lg font-black flex items-center gap-2">
+                  <Users className="h-5 w-5 text-calipso-600" />
+                  Ficha de Asistencia de Alumno
+                </DialogTitle>
+                <DialogDescription className="text-xs text-gray-500">
+                  Detalle cronológico de sesiones asistidas, ausencias y justificaciones.
+                </DialogDescription>
+              </div>
+              {alumnoDetalle && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={exportingPdf}
+                  onClick={handleExportFichaPdf}
+                  className="h-8 text-xs font-bold bg-calipso-50 text-calipso-700 border-calipso-200 hover:bg-calipso-100 shrink-0"
+                >
+                  {exportingPdf ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  ) : (
+                    <FileDown className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Exportar PDF
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+
+          {loadingDetalle || !alumnoDetalle ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-calipso-500" />
+            </div>
+          ) : (
+            <div ref={fichaPrintRef} className="space-y-6 pt-2 bg-white p-6 rounded-xl border border-gray-100 font-sans">
+              {/* Encabezado Institucional Pro */}
+              <div className="border-b-2 border-slate-900 pb-4 mb-4 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-calipso-600 inline-block"></span>
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-800">
+                      {colegioNombre || "Establecimiento Educacional"}
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+                    INFORME DE ASISTENCIA EXTRAESCOLAR
+                  </h2>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Documento Oficial de Registro y Participación
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">FECHA DE EMISIÓN</span>
+                  <span className="text-xs font-black text-slate-700 bg-slate-100 px-2 py-1 rounded-md inline-block mt-0.5">
+                    {new Date().toLocaleDateString("es-CL", { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Tarjeta Principal Alumno & Asistencia Global */}
+              <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <span className="text-[10px] font-black text-calipso-300 uppercase tracking-widest">ESTUDIANTE</span>
+                  <h3 className="font-black text-xl tracking-tight mt-0.5 text-white">{alumnoDetalle.alumno.nombre_completo}</h3>
+                  <div className="flex items-center gap-4 text-xs text-slate-300 font-medium mt-1">
+                    <span>RUT: <b className="text-white">{alumnoDetalle.alumno.rut}</b></span>
+                    <span>•</span>
+                    <span>Curso: <b className="text-white">{alumnoDetalle.alumno.curso}</b></span>
+                  </div>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur-md px-5 py-3 rounded-xl border border-white/20 text-center shrink-0">
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">ASISTENCIA GLOBAL</span>
+                  <span className={`text-3xl font-black leading-none inline-block mt-1 ${
+                    alumnoDetalle.resumen.porcentaje_asistencia >= 90 ? "text-emerald-400" :
+                    alumnoDetalle.resumen.porcentaje_asistencia >= 75 ? "text-cyan-300" : "text-rose-400"
+                  }`}>
+                    {alumnoDetalle.resumen.porcentaje_asistencia}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Resumen Ejecutivo de Métricas */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="p-3 bg-emerald-50/70 border border-emerald-200/60 rounded-xl text-center">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Presentes</span>
+                  <span className="text-2xl font-black text-emerald-700 mt-0.5 block">{alumnoDetalle.resumen.presentes}</span>
+                </div>
+                <div className="p-3 bg-rose-50/70 border border-rose-200/60 rounded-xl text-center">
+                  <span className="text-[10px] font-bold text-rose-800 uppercase tracking-wider block">Ausentes</span>
+                  <span className="text-2xl font-black text-rose-700 mt-0.5 block">{alumnoDetalle.resumen.ausentes}</span>
+                </div>
+                <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl text-center">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Justificados</span>
+                  <span className="text-2xl font-black text-amber-700 mt-0.5 block">{alumnoDetalle.resumen.justificados}</span>
+                </div>
+                <div className="p-3 bg-slate-100/80 border border-slate-200 rounded-xl text-center">
+                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Total Clases</span>
+                  <span className="text-2xl font-black text-slate-800 mt-0.5 block">{alumnoDetalle.resumen.total_sesiones}</span>
+                </div>
+              </div>
+
+              {/* Talleres Inscritos */}
+              <div>
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-calipso-500"></span>
+                  Talleres Inscritos y Responsables
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {alumnoDetalle.talleres.map((t: any) => (
+                    <div key={t.taller_id} className="bg-slate-50/80 border border-slate-200/80 p-3 rounded-xl flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-xs text-slate-900 block">{t.nombre_taller}</span>
+                        {t.profesor && <span className="text-[10px] text-slate-500 font-medium">Profesor(a): {t.profesor}</span>}
+                      </div>
+                      <span className="text-[10px] font-bold bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 uppercase">
+                        {t.estado_inscripcion}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Historial de Sesiones Dictadas */}
+              <div>
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-calipso-500"></span>
+                  Registro Cronológico de Sesiones
+                </h4>
+                {alumnoDetalle.historial.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                    No existen clases registradas para este estudiante en el período.
+                  </p>
+                ) : (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                    <Table>
+                      <TableHeader className="bg-slate-100/80">
+                        <TableRow>
+                          <TableHead className="text-xs font-bold text-slate-700">Fecha</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-700">Taller Extraescolar</TableHead>
+                          <TableHead className="text-center text-xs font-bold text-slate-700">Estado de Asistencia</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-700">Observaciones del Monitor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {alumnoDetalle.historial.map((h: any) => {
+                          const st = (h.estado || "").toLowerCase();
+                          const isPres = st === "presente" || st === "atraso";
+                          const isAus = st === "ausente";
+                          const isJust = st === "justificado";
+
+                          return (
+                            <TableRow key={h.asistencia_id} className="text-xs hover:bg-slate-50/50">
+                              <TableCell className="font-bold text-slate-800">
+                                {new Date(h.fecha + "T00:00:00").toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                              </TableCell>
+                              <TableCell className="font-semibold text-slate-700">{h.taller_nombre}</TableCell>
+                              <TableCell className="text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border ${
+                                  isPres ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  isAus ? "bg-rose-50 text-rose-700 border-rose-200" :
+                                  isJust ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-100 text-slate-600 border-slate-200"
+                                }`}>
+                                  {h.estado ? h.estado.toUpperCase() : "SIN MARCAR"}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-slate-600 italic text-[11px]">
+                                {h.observaciones || "—"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+
+              {/* Pie de Firma/Documento Oficial */}
+              <div className="pt-6 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                <div>
+                  <p className="font-semibold text-slate-500">Coordinación de Talleres Extraescolares</p>
+                  <p>{colegioNombre}</p>
+                </div>
+                <div className="text-right">
+                  <p>Documento generado electrónicamente por Sis-Extraescolar</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

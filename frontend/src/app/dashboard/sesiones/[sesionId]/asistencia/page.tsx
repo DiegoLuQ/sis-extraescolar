@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { sesionesApi, talleresApi, inscripcionesApi, asistenciaApi, alumnosApi } from "@/lib/api";
 import type { Sesion, Taller, Inscripcion, Alumno, NotaComportamiento, TipoComportamiento } from "@/types";
@@ -212,6 +212,15 @@ export default function AsistenciaPage() {
       setLoading(false);
     }
   };
+
+  // Listado ordenado alfabéticamente (A-Z) por nombre del alumno
+  const inscripcionesOrdenadas = useMemo(() => {
+    return [...inscripciones].sort((a, b) => {
+      const nombreA = alumnos.get(a.alumno_id)?.nombre_completo || "";
+      const nombreB = alumnos.get(b.alumno_id)?.nombre_completo || "";
+      return nombreA.localeCompare(nombreB, "es", { sensitivity: "base" });
+    });
+  }, [inscripciones, alumnos]);
 
   const isLockedForCurrentUser = sesion?.bloqueada && userRole.includes("monitor");
   const canToggleLock = userRole.includes("admin") || userRole.includes("coordinador");
@@ -536,7 +545,7 @@ export default function AsistenciaPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  inscripciones.map((ins) => {
+                  inscripcionesOrdenadas.map((ins) => {
                     const alu = alumnos.get(ins.alumno_id);
                     const estado = asistencias.get(ins.alumno_id) || "";
                     const isAbsentInSchool = absentFromSchool.some(a => a.alumno_id === ins.alumno_id);

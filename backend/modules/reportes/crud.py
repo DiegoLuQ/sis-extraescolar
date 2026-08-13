@@ -685,10 +685,18 @@ def generate_attendance_excel(
     # Fila 4: Encabezados
     start_row = 4
     headers = ["Taller", "Inscritos"]
+    meses_abrev = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
     for day in active_days_filtrados:
-        dia_num = day.split("-")[2]
+        parts = day.split("-")
+        mes_num = int(parts[1])
+        dia_num = parts[2]
         dia_nom = get_nombre_dia(day)[:3].upper()
-        headers.append(f"{dia_nom} {dia_num}")
+        
+        if export_modo in ["anio", "rango"]:
+            mes_abrev = meses_abrev[mes_num - 1]
+            headers.append(f"{dia_nom} {dia_num}/{mes_abrev}")
+        else:
+            headers.append(f"{dia_nom} {dia_num}")
     headers.extend(["Total", "Promedio"])
 
     for col_idx, h in enumerate(headers, 1):

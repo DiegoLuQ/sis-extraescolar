@@ -1075,16 +1075,25 @@ export default function ReportesPage() {
                   <TableHeader>
                     <TableRow className="bg-gray-50/50">
                       <TableHead className="min-w-[200px] font-bold text-gray-900 border-r">Taller</TableHead>
-                      {showDailyDetail && activeDaysFiltrados.map((day: string) => (
-                        <TableHead key={day} className="text-center min-w-[80px] p-2">
-                          <div className="flex flex-col items-center">
-                            <span className="text-[10px] uppercase font-black text-calipso-600">
-                              {getNombreDiaSemana(day).substring(0, 3)}
-                            </span>
-                            <span className="text-xs font-bold text-gray-700">{day.split("-")[2]}</span>
-                          </div>
-                        </TableHead>
-                      ))}
+                      {showDailyDetail && activeDaysFiltrados.map((day: string) => {
+                        const parts = day.split("-");
+                        const diaNum = parts[2];
+                        const mesNum = parseInt(parts[1]);
+                        const mesesAbrevs = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+                        const mesAbrev = mesesAbrevs[mesNum - 1];
+                        return (
+                          <TableHead key={day} className="text-center min-w-[80px] p-2">
+                            <div className="flex flex-col items-center">
+                              <span className="text-[10px] uppercase font-black text-calipso-600">
+                                {getNombreDiaSemana(day).substring(0, 3)}
+                              </span>
+                              <span className="text-xs font-bold text-gray-700">
+                                {diaNum}/{mesAbrev}
+                              </span>
+                            </div>
+                          </TableHead>
+                        );
+                      })}
                       <TableHead className="text-center font-bold text-calipso-600 bg-calipso-50/30 min-w-[90px]">Total</TableHead>
                     </TableRow>
                   </TableHeader>

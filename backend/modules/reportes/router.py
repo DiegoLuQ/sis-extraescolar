@@ -69,12 +69,13 @@ def get_weekly_summary(
 
 @router.get("/exportar-detalle-excel")
 def exportar_detalle_excel(
-    mes: int = Query(..., ge=1, le=12),
+    mes: int = Query(1, ge=1, le=12),
     anio: int = Query(...),
     fecha_inicio: str = Query(None),
     fecha_fin: str = Query(None),
     taller_id: str = Query(None),
     dias_semana: str = Query(None),
+    export_modo: str = Query("mes"),
     db: Session = Depends(get_db),
     tenant: TenantContext = Depends(get_current_tenant)
 ):
@@ -89,7 +90,8 @@ def exportar_detalle_excel(
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
         taller_id=taller_id,
-        dias_semana_str=dias_semana
+        dias_semana_str=dias_semana,
+        export_modo=export_modo
     )
 
 

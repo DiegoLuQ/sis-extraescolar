@@ -457,6 +457,7 @@ export const reportesApi = {
     fecha_fin?: string;
     taller_id?: string;
     dias_semana?: string;
+    export_modo?: string;
   }): Promise<Blob> => {
     const response = await api.get('/api/reportes/exportar-detalle-excel', {
       params,

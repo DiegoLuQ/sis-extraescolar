@@ -177,37 +177,54 @@ export default function ReportesPage() {
     return true;
   });
 
-  const handleExportExcel = async () => {
-    if (!reportData || workshopsFiltrados.length === 0) {
-      toast.error("No hay datos para exportar");
-      return;
-    }
+  // Estado para Modal de Exportación Excel de Asistencia
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportModo, setExportModo] = useState<"mes" | "anio" | "rango">("mes");
+  const [exportTallerId, setExportTallerId] = useState<string>("");
+  const [exportFechaInicio, setExportFechaInicio] = useState<string>("");
+  const [exportFechaFin, setExportFechaFin] = useState<string>("");
+  const [loadingExportExcel, setLoadingExportExcel] = useState(false);
 
+  const handleOpenExportModal = () => {
+    setExportTallerId(filtroTallerMatriz || "");
+    setExportFechaInicio(filtroFechaInicio || "");
+    setExportFechaFin(filtroFechaFin || "");
+    setExportModo("mes");
+    setIsExportModalOpen(true);
+  };
+
+  const handleExecuteExportExcel = async () => {
+    setLoadingExportExcel(true);
     try {
       const blob = await reportesApi.exportarDetalleExcel({
         mes: parseInt(mes),
         anio: parseInt(anio),
-        fecha_inicio: filtroFechaInicio || undefined,
-        fecha_fin: filtroFechaFin || undefined,
-        taller_id: filtroTallerMatriz || undefined,
-        dias_semana: diasSemanaSeleccionados.length > 0 ? diasSemanaSeleccionados.join(",") : undefined
+        fecha_inicio: exportModo === "rango" ? (exportFechaInicio || undefined) : undefined,
+        fecha_fin: exportModo === "rango" ? (exportFechaFin || undefined) : undefined,
+        taller_id: exportTallerId || undefined,
+        dias_semana: diasSemanaSeleccionados.length > 0 ? diasSemanaSeleccionados.join(",") : undefined,
+        export_modo: exportModo
       });
 
       const mesObj = meses.find(m => m.value === mes);
       const mesNombre = mesObj ? mesObj.label : mes;
+      const modoSuffix = exportModo === "anio" ? `Anual_${anio}` : exportModo === "rango" ? `Rango_${exportFechaInicio}_a_${exportFechaFin}` : `${mesNombre}_${anio}`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `detalle_asistencia_${colegioNombre || "taller"}_${mesNombre}_${anio}.xlsx`.replace(/\s+/g, "_"));
+      link.setAttribute("download", `detalle_asistencia_${colegioNombre || "taller"}_${modoSuffix}.xlsx`.replace(/\s+/g, "_"));
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
 
       toast.success("Reporte exportado a Excel (.xlsx) exitosamente");
+      setIsExportModalOpen(false);
     } catch (error) {
       console.error("Error exporting excel:", error);
       toast.error("Error al exportar el reporte a Excel");
+    } finally {
+      setLoadingExportExcel(false);
     }
   };
 
@@ -935,8 +952,8 @@ export default function ReportesPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={handleExportExcel} 
-                    className="h-9 text-xs font-bold gap-2 border-slate-200 hover:bg-slate-50"
+                    onClick={handleOpenExportModal} 
+                    className="h-9 text-xs font-bold gap-2 border-slate-200 hover:bg-slate-50 shadow-xs"
                   >
                     <FileDown className="h-4 w-4 text-calipso-600" />
                     Exportar Excel
@@ -1893,6 +1910,136 @@ export default function ReportesPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Configuración y Exportación de Excel de Asistencia */}
+      <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-gray-900 flex items-center gap-2">
+              <FileDown className="h-5 w-5 text-calipso-600" />
+              Exportar Detalle de Asistencia a Excel
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500 mt-1">
+              Configura el alcance del reporte en Excel con el desglose histórico de talleres y días habilitados.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            {/* Selección de Modo de Exportación */}
+            <div>
+              <label className="text-xs font-bold text-gray-700 block mb-2">Alcance de Fechas / Período</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExportModo("mes")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                    exportModo === "mes"
+                      ? "bg-calipso-50 border-calipso-600 text-calipso-700 shadow-xs"
+                      : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Mes Actual ({meses.find(m => m.value === mes)?.label})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExportModo("anio")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                    exportModo === "anio"
+                      ? "bg-calipso-50 border-calipso-600 text-calipso-700 shadow-xs"
+                      : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Año Completo ({anio})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExportModo("rango")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-center ${
+                    exportModo === "rango"
+                      ? "bg-calipso-50 border-calipso-600 text-calipso-700 shadow-xs"
+                      : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Rango de Fechas
+                </button>
+              </div>
+            </div>
+
+            {/* Campos condicionales para Rango de fechas */}
+            {exportModo === "rango" && (
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Desde (Fecha Inicio)</label>
+                  <input
+                    type="date"
+                    value={exportFechaInicio}
+                    onChange={(e) => setExportFechaInicio(e.target.value)}
+                    className="w-full h-8 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-calipso-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Hasta (Fecha Fin)</label>
+                  <input
+                    type="date"
+                    value={exportFechaFin}
+                    onChange={(e) => setExportFechaFin(e.target.value)}
+                    className="w-full h-8 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-calipso-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Filtrar por Taller específico */}
+            <div>
+              <label className="text-xs font-bold text-gray-700 block mb-1">Filtrar Taller (Opcional)</label>
+              <select
+                value={exportTallerId}
+                onChange={(e) => setExportTallerId(e.target.value)}
+                className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-calipso-500 font-medium"
+              >
+                <option value="">Todos los Talleres ({reportData?.workshops?.length || 0})</option>
+                {reportData?.workshops?.map((w: any) => (
+                  <option key={w.id} value={w.id}>{w.nombre_taller}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 mt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsExportModalOpen(false)}
+              className="h-9 text-xs font-semibold"
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleExecuteExportExcel}
+              disabled={loadingExportExcel}
+              className="bg-calipso-600 hover:bg-calipso-700 text-white h-9 px-4 text-xs font-bold gap-2 shadow-xs"
+            >
+              {loadingExportExcel ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Generando Excel...
+                </>
+              ) : (
+                <>
+                  <FileDown className="w-4 h-4" />
+                  Descargar Excel
+                </>
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -504,7 +504,8 @@ def generate_attendance_excel(
     fecha_inicio: str = None,
     fecha_fin: str = None,
     taller_id: str = None,
-    dias_semana_str: str = None
+    dias_semana_str: str = None,
+    export_modo: str = "mes"
 ):
     import io
     import openpyxl
@@ -530,10 +531,70 @@ def generate_attendance_excel(
         header_font_color = "FFFFFF"  # White text
         border_color = "BFDBFE"       # Light blue border
 
-    # Obtener datos del reporte mensual base
-    report_data = get_monthly_attendance_report(db, colegio_id, mes, anio)
-    active_days = report_data.get("active_days", [])
-    workshops = report_data.get("workshops", [])
+    # 1. Obtener talleres
+    talleres_q = db.query(Taller).filter(
+        Taller.colegio_id == colegio_id,
+        Taller.periodo == anio,
+        Taller.is_active == True
+    )
+    if taller_id:
+        talleres_q = talleres_q.filter(Taller.id == taller_id)
+    talleres = talleres_q.all()
+
+    if not talleres:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.cell(row=1, column=1, value="No hay talleres registrados para este período")
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    taller_ids = [t.id for t in talleres]
+
+    # 2. Obtener sesiones según el modo de exportación
+    sesiones_q = db.query(Sesion).filter(
+        Sesion.taller_id.in_(taller_ids),
+        func.dayofweek(Sesion.fecha_sesion).notin_([1, 7])
+    )
+
+    if export_modo == "anio":
+        sesiones_q = sesiones_q.filter(extract('year', Sesion.fecha_sesion) == anio)
+    elif export_modo == "rango" and fecha_inicio and fecha_fin:
+        sesiones_q = sesiones_q.filter(
+            func.date(Sesion.fecha_sesion) >= fecha_inicio,
+            func.date(Sesion.fecha_sesion) <= fecha_fin
+        )
+    else:
+        sesiones_q = sesiones_q.filter(
+            extract('month', Sesion.fecha_sesion) == mes,
+            extract('year', Sesion.fecha_sesion) == anio
+        )
+
+    sesiones = sesiones_q.all()
+
+    # 3. Matrícula por taller
+    enrollment_query = db.query(Inscripcion.taller_id, func.count(Inscripcion.id).label("count")).filter(
+        Inscripcion.taller_id.in_(taller_ids),
+        Inscripcion.estado == EstadoInscripcionEnum.inscrito
+    ).group_by(Inscripcion.taller_id).all()
+    enrollment_map = {str(r.taller_id): r.count for r in enrollment_query}
+
+    # 4. Asistencias presentes por sesión
+    sesion_ids = [s.id for s in sesiones]
+    asistencias_map = {}
+    if sesion_ids:
+        asistencias_raw = db.query(
+            Asistencia.sesion_id,
+            func.count(Asistencia.id).label("presentes")
+        ).filter(
+            Asistencia.sesion_id.in_(sesion_ids),
+            Asistencia.estado_asistencia == "presente"
+        ).group_by(Asistencia.sesion_id).all()
+        asistencias_map = {str(r.sesion_id): r.presentes for r in asistencias_raw}
+
+    # 5. Organizar días activos
+    active_days = sorted(list(set([s.fecha_sesion.strftime("%Y-%m-%d") for s in sesiones])))
 
     dias_nombres = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
 
@@ -541,30 +602,48 @@ def generate_attendance_excel(
         d = datetime.datetime.strptime(fecha_str, "%Y-%m-%d")
         return dias_nombres[d.weekday() if d.weekday() != 6 else 0] if d.weekday() == 6 else dias_nombres[d.weekday() + 1]
 
-    dias_seleccionados = dias_semana_str.split(",") if dias_semana_str else ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+    dias_seleccionados = dias_semana_str.split(",") if dias_semana_str else ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
-    # Filtrar días activos
+    # Filtrar días según rango y días de semana si aplica
     active_days_filtrados = []
     for day in active_days:
-        if fecha_inicio and day < fecha_inicio:
-            continue
-        if fecha_fin and day > fecha_fin:
-            continue
+        if export_modo == "mes":
+            if fecha_inicio and day < fecha_inicio:
+                continue
+            if fecha_fin and day > fecha_fin:
+                continue
         nombre_dia = get_nombre_dia(day)
         if dias_seleccionados and nombre_dia not in dias_seleccionados:
             continue
         active_days_filtrados.append(day)
 
-    # Filtrar talleres
+    # Construir mapa de asistencias por taller y día
     workshops_filtrados = []
-    for w in workshops:
-        if taller_id and str(w["id"]) != str(taller_id):
-            continue
+    for t in talleres:
+        matriculados_taller = enrollment_map.get(str(t.id), 0)
+        taller_asistencias = {}
+        total_taller = 0
+        for day in active_days_filtrados:
+            sesiones_hoy = [s for s in sesiones if str(s.taller_id) == str(t.id) and s.fecha_sesion.strftime("%Y-%m-%d") == day]
+            if sesiones_hoy:
+                count = sum(asistencias_map.get(str(s.id), 0) for s in sesiones_hoy)
+                taller_asistencias[day] = count
+                total_taller += count
+            else:
+                taller_asistencias[day] = None
+
         if active_days_filtrados:
-            tiene_actividad = any(w["asistencias"].get(day) is not None for day in active_days_filtrados)
-            if not tiene_actividad:
+            tiene_actividad = any(taller_asistencias.get(day) is not None for day in active_days_filtrados)
+            if not tiene_actividad and export_modo == "mes":
                 continue
-        workshops_filtrados.append(w)
+
+        workshops_filtrados.append({
+            "id": t.id,
+            "nombre_taller": t.nombre_taller,
+            "matriculados": matriculados_taller,
+            "asistencias": taller_asistencias,
+            "total_taller": total_taller
+        })
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -593,8 +672,15 @@ def generate_attendance_excel(
     meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     mes_str = meses_nombres[mes - 1] if 1 <= mes <= 12 else str(mes)
 
+    if export_modo == "anio":
+        periodo_texto = f"Año Completo {anio}"
+    elif export_modo == "rango" and fecha_inicio and fecha_fin:
+        periodo_texto = f"Rango: {fecha_inicio} a {fecha_fin} ({anio})"
+    else:
+        periodo_texto = f"Mes de {mes_str} {anio}"
+
     ws.cell(row=1, column=1, value=f"REPORTE DETALLE DE ASISTENCIA POR TALLER - {nombre_colegio.upper()}").font = title_font
-    ws.cell(row=2, column=1, value=f"Período: {mes_str} {anio} | Exportado el {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}").font = subtitle_font
+    ws.cell(row=2, column=1, value=f"Período: {periodo_texto} | Exportado el {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}").font = subtitle_font
 
     # Fila 4: Encabezados
     start_row = 4

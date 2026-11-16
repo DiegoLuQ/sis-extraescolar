@@ -60,6 +60,7 @@ export default function ReportesPage() {
   const [rankingData, setRankingData] = useState<any[]>([]);
   const [loadingRanking, setLoadingRanking] = useState(false);
   const [rankingFiltroRango, setRankingFiltroRango] = useState<"todos" | "100" | "90" | "75" | "bajo75">("todos");
+  const [rankingFiltroTaller, setRankingFiltroTaller] = useState<string>("");
   const [rankingBusqueda, setRankingBusqueda] = useState("");
   const [selectedAlumnoId, setSelectedAlumnoId] = useState<string | null>(null);
   const [alumnoDetalle, setAlumnoDetalle] = useState<any>(null);
@@ -274,11 +275,13 @@ export default function ReportesPage() {
     }
   }, [metasData]);
 
-  const fetchRanking = async () => {
+  const fetchRanking = async (tallerIdParam?: string) => {
+    const tallerId = tallerIdParam !== undefined ? tallerIdParam : rankingFiltroTaller;
     setLoadingRanking(true);
     try {
       const data = await reportesApi.getRankingAlumnos({
-        anio: parseInt(anio)
+        anio: parseInt(anio),
+        ...(tallerId ? { taller_id: tallerId } : {})
       });
       setRankingData(data);
     } catch (error) {
@@ -1475,9 +1478,25 @@ export default function ReportesPage() {
                     Consulta el nivel de asistencia global por alumno y accede a su ficha detallada por fechas.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <select
+                    value={rankingFiltroTaller}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRankingFiltroTaller(val);
+                      setRankingCurrentPage(1);
+                      fetchRanking(val);
+                    }}
+                    aria-label="Filtrar ranking por taller"
+                    className="h-8 rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-calipso-500 sm:w-52"
+                  >
+                    <option value="">Todos los talleres</option>
+                    {reportData?.workshops?.map((w: any) => (
+                      <option key={w.id} value={w.id}>{w.nombre_taller}</option>
+                    ))}
+                  </select>
                   <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                    <Search className="absolute left-2.5 top-2 h-4 w-4 text-gray-400" />
                     <input
                       type="text"
                       placeholder="Buscar por nombre o RUT..."
@@ -1486,7 +1505,7 @@ export default function ReportesPage() {
                         setRankingBusqueda(e.target.value);
                         setRankingCurrentPage(1);
                       }}
-                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-calipso-500"
+                      className="w-full h-8 pl-9 pr-3 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-calipso-500"
                     />
                   </div>
                 </div>

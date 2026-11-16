@@ -1041,7 +1041,14 @@ export default function TalleresPage() {
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
                           <BookOpen className="h-4 w-4 text-calipso-500 shrink-0" />
-                          <span className="font-semibold text-gray-900">{taller.nombre_taller}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(taller)}
+                            className="font-semibold text-gray-900 hover:text-calipso-600 hover:underline text-left"
+                            title="Editar taller"
+                          >
+                            {taller.nombre_taller}
+                          </button>
                         </div>
                         <span className="text-xs text-gray-500 ml-6">
                           {taller.nombre_colegio}

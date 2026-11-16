@@ -82,7 +82,8 @@ def get_monthly_attendance_report(db: Session, colegio_id: str, mes: int, anio: 
             "nombre_taller": t.nombre_taller,
             "matriculados": matriculados_taller,
             "asistencias": taller_asistencias,
-            "total_taller": total_taller
+            "total_taller": total_taller,
+            "sesiones_anio": t.sesiones_anio
         })
         
     # 6. Estadísticas diarias
@@ -903,6 +904,115 @@ def get_ranking_alumnos(
     # Ordenar por porcentaje de asistencia descendente y luego por nombre
     resultado.sort(key=lambda x: (-x["porcentaje_asistencia"], x["nombre_completo"]))
     return resultado
+
+
+def get_ranking_anual_taller(
+    db: Session,
+    colegio_id: str,
+    taller_id: str,
+    anio: Optional[int] = None
+) -> Dict:
+    """
+    Retorna el ranking de alumnos de un taller específico calculando el % de
+    asistencia sobre las sesiones anuales configuradas en el taller (sesiones_anio).
+    Si el taller no existe o no tiene sesiones_anio > 0, retorna lista vacía.
+    """
+    from modules.alumnos.models import Alumno
+
+    taller = db.query(Taller).filter(
+        Taller.id == str(taller_id),
+        Taller.colegio_id == str(colegio_id)
+    ).first()
+
+    if not taller or not taller.sesiones_anio or taller.sesiones_anio <= 0:
+        return {
+            "taller_id": str(taller_id),
+            "nombre_taller": taller.nombre_taller if taller else "",
+            "sesiones_anio": None,
+            "alumnos": []
+        }
+
+    inscripciones = db.query(Inscripcion, Alumno).join(
+        Alumno, Inscripcion.alumno_id == Alumno.id
+    ).filter(
+        Inscripcion.taller_id == str(taller_id),
+        Inscripcion.estado == "inscrito"
+    ).all()
+
+    if not inscripciones:
+        return {
+            "taller_id": taller.id,
+            "nombre_taller": taller.nombre_taller,
+            "sesiones_anio": taller.sesiones_anio,
+            "alumnos": []
+        }
+
+    alumnos_dict = {}
+    for _ins, alu in inscripciones:
+        if alu.id not in alumnos_dict:
+            alumnos_dict[alu.id] = {
+                "alumno_id": alu.id,
+                "nombre_completo": alu.nombre_completo,
+                "rut": alu.rut,
+                "curso": alu.curso,
+                "presentes": 0,
+                "ausentes": 0,
+                "justificados": 0,
+                "atrasos": 0,
+                "sesiones_registradas": 0
+            }
+
+    query_asist = db.query(Asistencia, Sesion).join(
+        Sesion, Asistencia.sesion_id == Sesion.id
+    ).filter(
+        Asistencia.alumno_id.in_(list(alumnos_dict.keys())),
+        Sesion.taller_id == str(taller_id)
+    )
+    if anio:
+        query_asist = query_asist.filter(extract('year', Sesion.fecha_sesion) == anio)
+
+    for asist, _ses in query_asist.all():
+        alu_id = asist.alumno_id
+        if alu_id not in alumnos_dict:
+            continue
+        st = (asist.estado_asistencia or "").lower()
+        alumnos_dict[alu_id]["sesiones_registradas"] += 1
+        if st == "presente":
+            alumnos_dict[alu_id]["presentes"] += 1
+        elif st == "atraso":
+            alumnos_dict[alu_id]["presentes"] += 1
+            alumnos_dict[alu_id]["atrasos"] += 1
+        elif st == "ausente":
+            alumnos_dict[alu_id]["ausentes"] += 1
+        elif st == "justificado":
+            alumnos_dict[alu_id]["justificados"] += 1
+
+    sesiones_anio = taller.sesiones_anio
+    resultado = []
+    for data in alumnos_dict.values():
+        pres = data["presentes"]
+        pct = round((pres / sesiones_anio) * 100, 1) if sesiones_anio > 0 else 0.0
+        resultado.append({
+            "alumno_id": data["alumno_id"],
+            "nombre_completo": data["nombre_completo"],
+            "rut": data["rut"],
+            "curso": data["curso"],
+            "sesiones_registradas": data["sesiones_registradas"],
+            "presentes": pres,
+            "ausentes": data["ausentes"],
+            "justificados": data["justificados"],
+            "atrasos": data["atrasos"],
+            "sesiones_anio": sesiones_anio,
+            "porcentaje_asistencia": pct
+        })
+
+    resultado.sort(key=lambda x: (-x["porcentaje_asistencia"], -x["presentes"], x["nombre_completo"]))
+    return {
+        "taller_id": taller.id,
+        "nombre_taller": taller.nombre_taller,
+        "sesiones_anio": sesiones_anio,
+        "alumnos": resultado
+    }
 
 
 def get_alumno_detalle_asistencia(

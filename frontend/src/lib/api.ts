@@ -469,6 +469,10 @@ export const reportesApi = {
     const response = await api.get('/api/reportes/ranking-alumnos', { params });
     return response.data;
   },
+  getRankingAnualTaller: async (params: { taller_id: string; anio?: number }) => {
+    const response = await api.get('/api/reportes/ranking-anual-taller', { params });
+    return response.data;
+  },
   getAlumnoDetalle: async (alumnoId: string, params?: { mes?: number; anio?: number }) => {
     const response = await api.get(`/api/reportes/alumno-detalle/${alumnoId}`, { params });
     return response.data;

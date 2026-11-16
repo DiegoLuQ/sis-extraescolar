@@ -114,6 +114,23 @@ def get_ranking_alumnos(
     )
 
 
+@router.get("/ranking-anual-taller")
+def get_ranking_anual_taller(
+    taller_id: str = Query(...),
+    anio: int = Query(None),
+    db: Session = Depends(get_db),
+    tenant: TenantContext = Depends(get_current_tenant)
+):
+    if tenant.rol == "monitor":
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver reportes globales")
+    return crud.get_ranking_anual_taller(
+        db=db,
+        colegio_id=tenant.colegio_id,
+        taller_id=taller_id,
+        anio=anio
+    )
+
+
 @router.get("/alumno-detalle/{alumno_id}")
 def get_alumno_detalle(
     alumno_id: str,

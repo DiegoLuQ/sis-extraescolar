@@ -27,6 +27,7 @@ class TallerBase(BaseModel):
     periodo: int = 2026
     cursos_asignados: Optional[str] = None
     meta_asistencia: Optional[int] = None  # NULL => hereda la meta del colegio
+    sesiones_anio: Optional[int] = None
 
 
 class TallerCreate(TallerBase):
@@ -44,6 +45,7 @@ class TallerUpdate(BaseModel):
     cursos_asignados: Optional[str] = None
     is_active: Optional[bool] = None
     meta_asistencia: Optional[int] = None
+    sesiones_anio: Optional[int] = None
     horarios: Optional[List[TallerHorarioBase]] = None
 
 

@@ -20,6 +20,8 @@ class Taller(Base):
     cursos_asignados = Column(String(500), nullable=True)
     # Meta de asistencia individual (%). NULL => hereda la meta del colegio.
     meta_asistencia = Column(Integer, nullable=True)
+    # Cantidad esperada de sesiones en el año para el cálculo de avance anual por taller.
+    sesiones_anio = Column(Integer, nullable=True)
 
     horarios = relationship("TallerHorario", backref="taller", cascade="all, delete-orphan", lazy="selectin")
 

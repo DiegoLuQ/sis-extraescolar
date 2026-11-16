@@ -369,6 +369,7 @@ def clonar_periodo(db: Session, source_periodo: int, target_periodo: int, taller
             periodo=target_periodo,
             cursos_asignados=source_taller.cursos_asignados,
             meta_asistencia=source_taller.meta_asistencia,
+            sesiones_anio=source_taller.sesiones_anio,
             is_active=True
         )
         db.add(new_taller)

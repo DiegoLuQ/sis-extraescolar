@@ -69,6 +69,13 @@ export default function ReportesPage() {
   const [rankingCurrentPage, setRankingCurrentPage] = useState<number>(1);
   const rankingItemsPerPage = 30;
 
+  // Estados para Ranking Anual por Taller (sobre sesiones_anio)
+  const [rankingAnualTallerId, setRankingAnualTallerId] = useState<string>("");
+  const [rankingAnualData, setRankingAnualData] = useState<any>(null);
+  const [loadingRankingAnual, setLoadingRankingAnual] = useState(false);
+  const [rankingAnualBusqueda, setRankingAnualBusqueda] = useState("");
+  const [rankingAnualPage, setRankingAnualPage] = useState<number>(1);
+
   const [showDailyDetail, setShowDailyDetail] = useState<boolean>(true);
 
   // Filtros dedicados para la sección "Detalle de Asistencia por Taller"
@@ -291,6 +298,44 @@ export default function ReportesPage() {
       setLoadingRanking(false);
     }
   };
+
+  const fetchRankingAnual = async (tallerId: string) => {
+    if (!tallerId) {
+      setRankingAnualData(null);
+      return;
+    }
+    setLoadingRankingAnual(true);
+    try {
+      const data = await reportesApi.getRankingAnualTaller({
+        taller_id: tallerId,
+        anio: parseInt(anio),
+      });
+      setRankingAnualData(data);
+    } catch (error) {
+      console.error("Error fetching ranking anual:", error);
+      toast.error("Error al cargar el avance anual por taller");
+    } finally {
+      setLoadingRankingAnual(false);
+    }
+  };
+
+  const talleresConSesionesAnio = (reportData?.workshops || []).filter(
+    (w: any) => typeof w.sesiones_anio === "number" && w.sesiones_anio > 0
+  );
+
+  useEffect(() => {
+    if (talleresConSesionesAnio.length === 0) {
+      if (rankingAnualTallerId) setRankingAnualTallerId("");
+      setRankingAnualData(null);
+      return;
+    }
+    const stillValid = talleresConSesionesAnio.some((w: any) => w.id === rankingAnualTallerId);
+    const targetId = stillValid ? rankingAnualTallerId : talleresConSesionesAnio[0].id;
+    if (targetId !== rankingAnualTallerId) {
+      setRankingAnualTallerId(targetId);
+    }
+    fetchRankingAnual(targetId);
+  }, [reportData, anio]);
 
   const handleVerFichaAlumno = async (alumnoId: string) => {
     setSelectedAlumnoId(alumnoId);
@@ -890,6 +935,10 @@ export default function ReportesPage() {
           <TabsTrigger value="ranking" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0 flex items-center gap-1.5">
             <Trophy className="h-3.5 w-3.5" />
             Ranking & Ficha Alumnos
+          </TabsTrigger>
+          <TabsTrigger value="ranking-anual" className="rounded-lg data-[state=active]:bg-calipso-500 data-[state=active]:text-white shrink-0 flex items-center gap-1.5">
+            <Award className="h-3.5 w-3.5" />
+            Avance Anual por Taller
           </TabsTrigger>
         </TabsList>
 
@@ -1727,6 +1776,207 @@ export default function ReportesPage() {
                             size="sm"
                             disabled={rankingCurrentPage >= totalPages}
                             onClick={() => setRankingCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            className="h-8 text-xs font-bold text-gray-600"
+                          >
+                            Siguiente
+                            <ChevronRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* CONTENIDO AVANCE ANUAL POR TALLER (SOBRE SESIONES_ANIO) */}
+        <TabsContent value="ranking-anual" className="space-y-6">
+          <Card className="border-0 shadow-md bg-white overflow-hidden">
+            <CardHeader className="bg-slate-50/60 border-b border-slate-100 p-4 sm:p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
+                    <Award className="h-5 w-5 text-calipso-600" />
+                    Avance Anual por Taller (Sesiones Esperadas)
+                  </CardTitle>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Calcula el porcentaje real de asistencia anual dividiendo las asistencias del alumno entre las sesiones anuales configuradas en el taller. Solo muestra talleres con sesiones anuales definidas.
+                  </p>
+                </div>
+                {talleresConSesionesAnio.length > 0 && (
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <select
+                      value={rankingAnualTallerId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRankingAnualTallerId(val);
+                        setRankingAnualPage(1);
+                        fetchRankingAnual(val);
+                      }}
+                      aria-label="Seleccionar taller para avance anual"
+                      className="h-8 rounded-lg border border-gray-200 bg-white px-2.5 text-xs text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-calipso-500 sm:w-60"
+                    >
+                      {talleresConSesionesAnio.map((w: any) => (
+                        <option key={w.id} value={w.id}>
+                          {w.nombre_taller} ({w.sesiones_anio} ses.)
+                        </option>
+                      ))}
+                    </select>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-2.5 top-2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre, RUT o curso..."
+                        value={rankingAnualBusqueda}
+                        onChange={(e) => {
+                          setRankingAnualBusqueda(e.target.value);
+                          setRankingAnualPage(1);
+                        }}
+                        className="w-full h-8 pl-9 pr-3 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-calipso-500"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-0">
+              {talleresConSesionesAnio.length === 0 ? (
+                <div className="text-center py-12 px-4 text-gray-400">
+                  <Award className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm font-semibold text-gray-600">
+                    Ningún taller del período {anio} tiene configuradas sus sesiones por año.
+                  </p>
+                  <p className="text-xs mt-1">
+                    Edita un taller en la sección Talleres y completa el campo &quot;Sesiones por Año&quot; para verlo aquí.
+                  </p>
+                </div>
+              ) : loadingRankingAnual ? (
+                <div className="flex items-center justify-center h-48">
+                  <Loader2 className="h-6 w-6 animate-spin text-calipso-500" />
+                </div>
+              ) : (
+                (() => {
+                  const alumnos = rankingAnualData?.alumnos || [];
+                  const q = rankingAnualBusqueda.toLowerCase().trim();
+                  const filtrados = alumnos.filter((alu: any) => {
+                    if (!q) return true;
+                    return (
+                      alu.nombre_completo.toLowerCase().includes(q) ||
+                      alu.rut.toLowerCase().includes(q) ||
+                      alu.curso.toLowerCase().includes(q)
+                    );
+                  });
+
+                  if (filtrados.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-gray-400">
+                        <Users className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">No se encontraron alumnos inscritos para este taller.</p>
+                      </div>
+                    );
+                  }
+
+                  const totalPages = Math.ceil(filtrados.length / rankingItemsPerPage);
+                  const startIndex = (rankingAnualPage - 1) * rankingItemsPerPage;
+                  const paginados = filtrados.slice(startIndex, startIndex + rankingItemsPerPage);
+
+                  return (
+                    <div>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50/80">
+                              <TableHead className="w-12 text-center font-bold text-gray-700">#</TableHead>
+                              <TableHead className="font-bold text-gray-700">Alumno</TableHead>
+                              <TableHead className="font-bold text-gray-700">Curso</TableHead>
+                              <TableHead className="text-center font-bold text-gray-700">Asistencias / Sesiones Año</TableHead>
+                              <TableHead className="text-center font-bold text-gray-700">% Anual</TableHead>
+                              <TableHead className="text-right font-bold text-gray-700 pr-6">Acciones</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {paginados.map((alu: any, idx: number) => {
+                              const posGlobal = startIndex + idx + 1;
+                              const pct = alu.porcentaje_asistencia;
+                              const badgeColor = pct >= 90
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                                : pct >= 75
+                                ? "bg-blue-100 text-blue-800 border-blue-200"
+                                : "bg-rose-100 text-rose-800 border-rose-200";
+
+                              return (
+                                <TableRow key={alu.alumno_id} className="hover:bg-slate-50/60 transition-colors">
+                                  <TableCell className="text-center font-black text-xs text-gray-400">
+                                    {posGlobal === 1 ? (
+                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-100 text-amber-800 font-extrabold text-xs">1</span>
+                                    ) : posGlobal === 2 ? (
+                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-200 text-slate-700 font-extrabold text-xs">2</span>
+                                    ) : posGlobal === 3 ? (
+                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-700/20 text-amber-900 font-extrabold text-xs">3</span>
+                                    ) : (
+                                      posGlobal
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-sm text-gray-900">{alu.nombre_completo}</span>
+                                      <span className="text-[10px] text-gray-400">{alu.rut}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-xs text-gray-600">{alu.curso}</TableCell>
+                                  <TableCell className="text-center">
+                                    <span className="font-bold text-sm text-gray-800">{alu.presentes}</span>
+                                    <span className="text-xs text-gray-400"> / {alu.sesiones_anio}</span>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black border ${badgeColor}`}>
+                                      {pct}%
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-right pr-6">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleVerFichaAlumno(alu.alumno_id)}
+                                      className="h-8 text-xs font-bold text-calipso-600 border-calipso-200 hover:bg-calipso-50"
+                                    >
+                                      <Eye className="h-3.5 w-3.5 mr-1" />
+                                      Ver Ficha
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-100 bg-slate-50/40">
+                        <p className="text-xs text-gray-500 font-medium">
+                          Mostrando <b>{startIndex + 1}</b> a <b>{Math.min(startIndex + rankingItemsPerPage, filtrados.length)}</b> de <b>{filtrados.length}</b> alumnos
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={rankingAnualPage === 1}
+                            onClick={() => setRankingAnualPage(prev => Math.max(prev - 1, 1))}
+                            className="h-8 text-xs font-bold text-gray-600"
+                          >
+                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            Anterior
+                          </Button>
+                          <span className="text-xs font-bold text-gray-700 px-2">
+                            Página {rankingAnualPage} de {totalPages || 1}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={rankingAnualPage >= totalPages}
+                            onClick={() => setRankingAnualPage(prev => Math.min(prev + 1, totalPages))}
                             className="h-8 text-xs font-bold text-gray-600"
                           >
                             Siguiente

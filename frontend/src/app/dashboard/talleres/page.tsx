@@ -98,6 +98,7 @@ export default function TalleresPage() {
     periodo: new Date().getFullYear(),
     cursos_asignados: "",
     meta_asistencia: null,
+    sesiones_anio: null,
     colegio_id: undefined,
     horarios: [{ dia: "Lunes", hora_inicio: "", hora_fin: "" }],
   });
@@ -171,6 +172,7 @@ export default function TalleresPage() {
       periodo: taller.periodo,
       cursos_asignados: taller.cursos_asignados || "",
       meta_asistencia: taller.meta_asistencia ?? null,
+      sesiones_anio: taller.sesiones_anio ?? null,
       colegio_id: taller.colegio_id,
       horarios: horarios.map((h) => ({
         dia: h.dia,
@@ -378,6 +380,7 @@ export default function TalleresPage() {
       periodo: new Date().getFullYear(),
       cursos_asignados: "",
       meta_asistencia: null,
+      sesiones_anio: null,
       colegio_id: undefined,
       horarios: [{ dia: "Lunes", hora_inicio: "", hora_fin: "" }],
     });
@@ -643,6 +646,22 @@ export default function TalleresPage() {
                             })
                           }
                           placeholder="Vacío = hereda la meta del colegio"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="sesiones_anio">Sesiones por Año (Opcional)</Label>
+                        <Input
+                          id="sesiones_anio"
+                          type="number"
+                          min={1}
+                          value={formData.sesiones_anio ?? ""}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              sesiones_anio: e.target.value === "" ? null : parseInt(e.target.value),
+                            })
+                          }
+                          placeholder="Ej: 60 (para ranking anual por taller)"
                         />
                       </div>
                       {editingTaller && (

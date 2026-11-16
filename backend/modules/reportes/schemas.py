@@ -8,6 +8,7 @@ class WorkshopAttendance(BaseModel):
     matriculados: int
     asistencias: Dict[str, Optional[int]]  # { "2026-05-01": 15, ... }
     total_taller: int
+    sesiones_anio: Optional[int] = None
 
 class MonthlyReportResponse(BaseModel):
     active_days: List[str]  # Fechas ordenadas

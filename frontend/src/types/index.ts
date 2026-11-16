@@ -77,6 +77,7 @@ export interface Taller {
   periodo: number;
   cursos_asignados?: string;
   meta_asistencia?: number | null;
+  sesiones_anio?: number | null;
   horarios?: TallerHorario[];
 }
 
@@ -90,6 +91,7 @@ export interface TallerCreate {
   periodo: number;
   cursos_asignados?: string;
   meta_asistencia?: number | null;
+  sesiones_anio?: number | null;
   colegio_id?: UUID;
   horarios?: TallerHorario[];
 }
@@ -105,6 +107,7 @@ export interface TallerUpdate {
   cursos_asignados?: string;
   is_active?: boolean;
   meta_asistencia?: number | null;
+  sesiones_anio?: number | null;
   colegio_id?: UUID;
   horarios?: TallerHorario[];
 }
